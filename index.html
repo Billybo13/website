@@ -61,6 +61,7 @@ html,body{
   font-size:22px;
   line-height:1.5;
   text-align:center;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 .bounce{
   animation: bounceScale 360ms cubic-bezier(.3,.9,.3,1);
@@ -169,10 +170,15 @@ class Particle {
 }
 let particles = [];
 function spawnParticles(count,color,intensity){
+  const speed = intensity * 4; // faster
   for(let i=0;i<count;i++){
-    const a = Math.random()*Math.PI*2;
-    const s = (Math.random()*2+0.5)*intensity;
-    particles.push(new Particle(cw/2,ch/2,Math.cos(a)*s,Math.sin(a)*s,color,60,4));
+    const angle = Math.random() * Math.PI * 2;
+    const velocity = (Math.random() * 1.5 + 0.5) * speed;
+    const vx = Math.cos(angle) * velocity;
+    const vy = Math.sin(angle) * velocity;
+    const size = Math.random() * 3 + 2;
+    const life = 80 + Math.random() * 40;
+    particles.push(new Particle(cw/2, ch/2, vx, vy, color, life, size));
   }
 }
 
@@ -229,7 +235,7 @@ function animate(t){
   particles = particles.filter(p=>p.life>0);
   particles.forEach(p=>p.draw(ctx));
 
-  // Change quote on strong beat
+  // Change quote on strong bass beat
   if(low > 50){
     quoteCard.classList.remove('bounce');
     void quoteCard.offsetWidth;
@@ -241,13 +247,17 @@ function animate(t){
   if(isPlaying) requestAnimationFrame(animate);
 }
 
-function avgFreq(f1,f2){
-  const nyquist = audioCtx.sampleRate/2;
-  const start = Math.floor(f1/nyquist*dataArray.length);
-  const end = Math.floor(f2/nyquist*dataArray.length);
-  let sum=0;
-  for(let i=start;i<end;i++) sum+=dataArray[i];
-  return sum/(end-start);
+function avgFreq(minHz, maxHz) {
+  const nyquist = audioCtx.sampleRate / 2;
+  const lowIndex = Math.floor(minHz / nyquist * dataArray.length);
+  const highIndex = Math.min(dataArray.length - 1, Math.floor(maxHz / nyquist * dataArray.length));
+  let sum = 0;
+  let count = 0;
+  for (let i = lowIndex; i <= highIndex; i++) {
+    sum += dataArray[i];
+    count++;
+  }
+  return count ? sum / count : 0;
 }
 
 // ===== Controls =====
