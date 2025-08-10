@@ -3,133 +3,69 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AI + Humanity — Home</title>
+<title>AI + Humanity — Immersive</title>
 <style>
-:root{
-  --bg:#071021;
-  --accent: #8be9fd;
-  --quote-color: #e6f7ff;
-}
 html,body{
-  height:100%;margin:0;
-  background:var(--bg);
-  font-family:Inter, sans-serif;
+  margin:0; padding:0;
+  background:black; color:white;
+  overflow:hidden; height:100%;
+  font-family: 'Inter', sans-serif;
 }
-.wrap{
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:40px;
-  padding:40px;
-  box-sizing:border-box;
+#bgCanvas{
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  z-index:-1;
 }
-.hero{
-  width:760px;
-  max-width:90vw;
-  height:460px;
-  background:rgba(255,255,255,0.03);
-  border-radius:14px;
-  padding:28px;
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  color:white;
-}
-.title{
-  color:var(--accent);
-  font-weight:700;
-  font-size:20px;
-}
-.sub{
-  color:rgba(255,255,255,0.6);
-  font-size:13px;
+.carousel-container{
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  perspective: 1000px;
+  width: 800px; height: 200px;
 }
 .carousel{
-  flex:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  width:100%; height:100%;
+  transform-style: preserve-3d;
+  animation: rotateCylinder 24s linear infinite;
 }
-.quote-card{
-  width:640px;
-  max-width:86%;
-  padding:28px;
-  background:rgba(255,255,255,0.02);
-  border-radius:12px;
-  color:var(--quote-color);
-  font-size:22px;
-  line-height:1.5;
-  text-align:center;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-.bounce{
-  animation: bounceScale 360ms cubic-bezier(.3,.9,.3,1);
-}
-@keyframes bounceScale {
-  0%{ transform: translateY(0) scale(1); }
-  30%{ transform: translateY(-10px) scale(1.03); }
-  100%{ transform: translateY(0) scale(1); }
-}
-.controls{
-  width:360px;
-  max-width:38vw;
-  height:460px;
-  background:rgba(255,255,255,0.03);
-  border-radius:14px;
+.carousel.paused{ animation-play-state: paused; }
+.quote{
+  position:absolute;
+  width:700px; height:200px;
+  left:50%; top:0;
+  margin-left:-350px;
+  background:rgba(255,255,255,0.05);
+  backdrop-filter: blur(6px);
+  border-radius: 12px;
+  display:flex; align-items:center; justify-content:center;
+  font-size: 1.5rem; text-align:center;
   padding:20px;
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  color:white;
+  box-shadow:0 0 15px rgba(255,255,255,0.1);
+  transition: text-shadow 0.3s ease;
 }
-button.play{
+@keyframes rotateCylinder {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(-360deg); }
+}
+button#playBtn{
+  position:absolute;
+  top:20px; left:20px;
+  padding:10px 20px;
   background:linear-gradient(90deg,#10b981,#06b6d4);
-  color:white;border:0;padding:10px 16px;
-  border-radius:10px;font-weight:600;cursor:pointer;
+  border:none; border-radius:8px;
+  color:white; font-size:16px; cursor:pointer;
 }
-.mute{
-  background:transparent;
-  border:1px solid rgba(255,255,255,0.2);
-  color:white;
-  padding:8px 10px;
-  border-radius:10px;
-  cursor:pointer;
-}
-.slider{flex:1;}
-input[type=range]{width:100%;}
-.canvas-wrap{flex:1;border-radius:10px;overflow:hidden;}
-canvas{width:100%;height:100%;display:block;}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <section class="hero">
-    <div>
-      <div class="title">AI & Humanity — Ahead</div>
-      <div class="sub">Rotating thoughts on technology guiding human flourishing</div>
-    </div>
-    <div class="carousel">
-      <div class="quote-card" id="quoteCard"></div>
-    </div>
-  </section>
-  <aside class="controls">
-    <div style="display:flex;gap:8px;">
-      <button class="play" id="btnPlay">Play</button>
-      <button class="mute" id="btnMute">Mute</button>
-    </div>
-    <div class="slider">
-      Volume:
-      <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8">
-    </div>
-    <div class="canvas-wrap">
-      <canvas id="particles"></canvas>
-    </div>
-  </aside>
+<canvas id="bgCanvas"></canvas>
+
+<div class="carousel-container">
+  <div class="carousel" id="carousel"></div>
 </div>
 
+<button id="playBtn">Play</button>
+
 <script>
-// ===== Quotes =====
 const quotes = [
   "AI can be a compass — guiding societies toward wiser decisions.",
   "When designed with empathy, AI amplifies human capacity.",
@@ -139,153 +75,154 @@ const quotes = [
   "From medicine to farming, AI’s insights can unlock human flourishing.",
   "The future isn't AI vs humans — it’s AI + humans co-creating."
 ];
-let currentQuote = 0;
-const quoteCard = document.getElementById('quoteCard');
-quoteCard.textContent = quotes[0];
 
-// ===== Canvas & Particles =====
-const canvas = document.getElementById('particles');
+// Create carousel faces
+const carousel = document.getElementById('carousel');
+const panelCount = quotes.length;
+const angleStep = 360 / panelCount;
+quotes.forEach((q,i)=>{
+  const panel = document.createElement('div');
+  panel.className = 'quote';
+  panel.style.transform = `rotateY(${i*angleStep}deg) translateZ(400px)`;
+  panel.textContent = q;
+  carousel.appendChild(panel);
+});
+
+// ===== Particle System =====
+const canvas = document.getElementById('bgCanvas');
 const ctx = canvas.getContext('2d');
-let cw, ch;
-function resizeCanvas(){
-  cw = canvas.width = canvas.clientWidth * window.devicePixelRatio;
-  ch = canvas.height = canvas.clientHeight * window.devicePixelRatio;
+let w,h;
+function resize(){
+  w = canvas.width = window.innerWidth * window.devicePixelRatio;
+  h = canvas.height = window.innerHeight * window.devicePixelRatio;
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.addEventListener('resize', resize);
+resize();
 
-class Particle {
-  constructor(x,y,vx,vy,color,life,size){
-    this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.color=color;this.life=life;this.maxLife=life;this.size=size;
+class Star {
+  constructor(){
+    this.reset();
   }
-  update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;this.life-=dt;}
-  draw(ctx){
-    ctx.globalAlpha = Math.max(0,this.life/this.maxLife);
-    ctx.fillStyle = this.color;
+  reset(){
+    this.x = Math.random()*w;
+    this.y = Math.random()*h;
+    this.vx = (Math.random()-0.5)*0.3;
+    this.vy = (Math.random()-0.5)*0.3;
+    this.size = Math.random()*2+0.5;
+    this.alpha = Math.random()*0.8+0.2;
+  }
+  update(mouse){
+    // Drift toward mouse subtly
+    const dx = (mouse.x - this.x)*0.0005;
+    const dy = (mouse.y - this.y)*0.0005;
+    this.vx += dx;
+    this.vy += dy;
+    this.x += this.vx;
+    this.y += this.vy;
+    if(this.x<0||this.x>w||this.y<0||this.y>h) this.reset();
+  }
+  draw(){
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = 'white';
     ctx.beginPath();
     ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
 }
-let particles = [];
-function spawnParticles(count,color,intensity){
-  const speed = intensity * 4; // faster
-  for(let i=0;i<count;i++){
-    const angle = Math.random() * Math.PI * 2;
-    const velocity = (Math.random() * 1.5 + 0.5) * speed;
-    const vx = Math.cos(angle) * velocity;
-    const vy = Math.sin(angle) * velocity;
-    const size = Math.random() * 3 + 2;
-    const life = 80 + Math.random() * 40;
-    particles.push(new Particle(cw/2, ch/2, vx, vy, color, life, size));
-  }
-}
+let stars = Array.from({length:250}, ()=>new Star());
+let mouse = {x:w/2, y:h/2};
+window.addEventListener('mousemove', e=>{
+  mouse.x = e.clientX * window.devicePixelRatio;
+  mouse.y = e.clientY * window.devicePixelRatio;
+});
 
-// ===== Audio Setup (fetch + decode) =====
-let audioCtx, analyser, dataArray, gainNode;
+// ===== Audio Setup =====
+let audioCtx, analyser, dataArray, gainNode, buffer;
 let isPlaying = false;
-let storedBuffer = null;
-let bufferSource = null;
-
 async function initAudio(){
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 1024;
   dataArray = new Uint8Array(analyser.frequencyBinCount);
   gainNode = audioCtx.createGain();
-  gainNode.gain.value = document.getElementById('volume').value;
-  analyser.connect(audioCtx.destination);
+  gainNode.gain.value = 0.8;
 
   const resp = await fetch('goldberg_variations.mp3');
   const buf = await resp.arrayBuffer();
-  storedBuffer = await audioCtx.decodeAudioData(buf);
+  buffer = await audioCtx.decodeAudioData(buf);
 }
 
-function playBuffer(){
-  bufferSource = audioCtx.createBufferSource();
-  bufferSource.buffer = storedBuffer;
-  bufferSource.connect(gainNode);
+function playAudio(){
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(gainNode);
   gainNode.connect(analyser);
-  bufferSource.start();
-  bufferSource.onended = () => {
-    isPlaying = false;
-    document.getElementById('btnPlay').textContent = "Play";
-  };
+  analyser.connect(audioCtx.destination);
+  source.start();
+  return source;
 }
 
-// ===== Animation =====
-let lastTime = performance.now();
-function animate(t){
-  const dt = (t - lastTime)/16;
-  lastTime = t;
-  ctx.fillStyle = "rgba(0,0,0,0.2)";
-  ctx.fillRect(0,0,cw,ch);
-
-  analyser.getByteFrequencyData(dataArray);
-  const low = avgFreq(20,250);
-  const mid = avgFreq(250,2000);
-  const high = avgFreq(2000,8000);
-
-  if(low > 30) spawnParticles(2,"#ff6b35",low/50);
-  if(mid > 25) spawnParticles(2,"#34d399",mid/50);
-  if(high > 20) spawnParticles(2,"#7c3aed",high/50);
-
-  particles.forEach(p=>p.update(dt));
-  particles = particles.filter(p=>p.life>0);
-  particles.forEach(p=>p.draw(ctx));
-
-  // Change quote on strong bass beat
-  if(low > 50){
-    quoteCard.classList.remove('bounce');
-    void quoteCard.offsetWidth;
-    quoteCard.classList.add('bounce');
-    currentQuote = (currentQuote+1)%quotes.length;
-    quoteCard.textContent = quotes[currentQuote];
-  }
-
-  if(isPlaying) requestAnimationFrame(animate);
-}
-
-function avgFreq(minHz, maxHz) {
-  const nyquist = audioCtx.sampleRate / 2;
-  const lowIndex = Math.floor(minHz / nyquist * dataArray.length);
-  const highIndex = Math.min(dataArray.length - 1, Math.floor(maxHz / nyquist * dataArray.length));
+function avgFreq(minHz, maxHz){
+  const nyquist = audioCtx.sampleRate/2;
+  const lowIndex = Math.floor(minHz/nyquist*dataArray.length);
+  const highIndex = Math.min(dataArray.length-1, Math.floor(maxHz/nyquist*dataArray.length));
   let sum = 0;
-  let count = 0;
-  for (let i = lowIndex; i <= highIndex; i++) {
-    sum += dataArray[i];
-    count++;
-  }
-  return count ? sum / count : 0;
+  for(let i=lowIndex;i<=highIndex;i++) sum += dataArray[i];
+  return sum/(highIndex-lowIndex+1);
 }
 
-// ===== Controls =====
-document.getElementById('btnPlay').addEventListener('click', async ()=>{
+// ===== Animation Loop =====
+let audioSource;
+function animate(){
+  ctx.clearRect(0,0,w,h);
+
+  if(isPlaying){
+    analyser.getByteFrequencyData(dataArray);
+    const bass = avgFreq(20,250);
+    const mid = avgFreq(250,2000);
+    const treble = avgFreq(2000,8000);
+
+    // Bass bursts
+    if(bass>40){
+      for(let i=0;i<5;i++){
+        const s = stars[Math.floor(Math.random()*stars.length)];
+        s.vx += (Math.random()-0.5)*2;
+        s.vy += (Math.random()-0.5)*2;
+      }
+    }
+
+    // Treble glow
+    const panels = document.querySelectorAll('.quote');
+    panels.forEach(p=>{
+      p.style.textShadow = `0 0 ${treble/5}px rgba(255,255,255,0.8)`;
+    });
+  }
+
+  stars.forEach(s=>{
+    s.update(mouse);
+    s.draw();
+  });
+
+  requestAnimationFrame(animate);
+}
+
+// ===== Play Button =====
+document.getElementById('playBtn').addEventListener('click', async ()=>{
   if(!audioCtx){
     await initAudio();
   }
   if(!isPlaying){
     if(audioCtx.state === "suspended") await audioCtx.resume();
-    playBuffer();
+    audioSource = playAudio();
     isPlaying = true;
-    document.getElementById('btnPlay').textContent = "Pause";
+    document.getElementById('playBtn').textContent = "Pause";
     requestAnimationFrame(animate);
   } else {
     audioCtx.suspend();
     isPlaying = false;
-    document.getElementById('btnPlay').textContent = "Play";
+    document.getElementById('playBtn').textContent = "Play";
   }
-});
-
-document.getElementById('btnMute').addEventListener('click', ()=>{
-  if(!audioCtx) return;
-  gainNode.gain.value = gainNode.gain.value>0 ? 0 : document.getElementById('volume').value;
-});
-
-document.getElementById('volume').addEventListener('input', (e)=>{
-  if(!audioCtx) return;
-  gainNode.gain.value = parseFloat(e.target.value);
 });
 </script>
 </body>
