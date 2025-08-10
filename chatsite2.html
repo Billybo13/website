@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AI + Humanity — Home</title>
+<style>
+  :root{
+    --bg:#071021;
+    --card:#0f1724;
+    --accent: #8be9fd;
+    --quote-color: #e6f7ff;
+    --muted: rgba(255,255,255,0.08);
+    --glass: rgba(255,255,255,0.03);
+    --radius: 14px;
+  }
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 600px at 10% 10%, #0b2540 0%, var(--bg) 40%), var(--bg);font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  .wrap{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:40px;
+    padding:40px;
+    box-sizing:border-box;
+  }
+
+  /* Left: carousel/card */
+  .hero {
+    width:760px;
+    max-width:90vw;
+    height:460px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border-radius:var(--radius);
+    box-shadow: 0 10px 40px rgba(2,6,23,0.7), inset 0 1px 0 rgba(255,255,255,0.02);
+    position:relative;
+    overflow:hidden;
+    padding:28px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:16px;
+  }
+  .title{
+    color:var(--accent);
+    font-weight:700;
+    letter-spacing:0.6px;
+    font-size:20px;
+  }
+  .sub{
+    color:rgba(255,255,255,0.6);
+    font-size:13px;
+  }
+
+  /* carousel area */
+  .carousel{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    transform-origin:center;
+  }
+  .quote-card{
+    width:640px;
+    max-width:86%;
+    padding:28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+    border-radius:12px;
+    color:var(--quote-color);
+    font-size:22px;
+    line-height:1.5;
+    text-align:center;
+    transition: transform 420ms cubic-bezier(.22,.9,.3,1), box-shadow 300ms;
+    box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+    will-change: transform;
+  }
+  .quote-card.small{ font-size:18px; padding:22px; }
+
+  /* small indicators */
+  .indicators{
+    display:flex;
+    gap:8px;
+    justify-content:center;
+    margin-top:12px;
+  }
+  .dot{
+    width:10px;height:10px;border-radius:50%;background:var(--muted);cursor:pointer;
+    transition: transform 200ms, background 200ms;
+  }
+  .dot.active{background:var(--accent);transform:scale(1.35);}
+
+  /* right-side: audio + canvas */
+  .controls {
+    width:360px;
+    max-width:38vw;
+    height:460px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+    border-radius:var(--radius);
+    padding:20px;
+    box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    align-items:stretch;
+  }
+  .audio-row { display:flex; gap:12px; align-items:center; }
+  button.play {
+    background:linear-gradient(90deg,#10b981,#06b6d4); color:white; border:0; padding:10px 16px; border-radius:10px; font-weight:600; cursor:pointer;
+  }
+  .mute { background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--quote-color); padding:8px 10px; border-radius:10px; cursor:pointer; }
+  .slider { flex:1; }
+  input[type=range]{ width:100%; }
+
+  .canvas-wrap { position:relative; flex:1; border-radius:10px; overflow:hidden; background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00)); display:flex; align-items:stretch; justify-content:stretch; }
+  canvas { width:100%; height:100%; display:block; }
+
+  .spec-bars { display:flex; gap:8px; align-items:flex-end; padding:8px 4px; }
+  .spec {
+    flex:1; height:60px; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:6px; display:flex; align-items:end; padding:6px;
+  }
+  .spec .level { width:100%; height:12px; background:linear-gradient(90deg,#111,#222); border-radius:6px; transition:height 120ms linear; }
+
+  .footer-note{ color:rgba(255,255,255,0.45); font-size:13px; margin-top:8px; text-align:center; }
+
+  /* bouncing animation helper - applied via JS when beat detected */
+  .bounce {
+    animation: bounceScale 360ms cubic-bezier(.3,.9,.3,1);
+  }
+  @keyframes bounceScale {
+    0%{ transform: translateY(0) scale(1); }
+    30%{ transform: translateY(-10px) scale(1.03); }
+    100%{ transform: translateY(0) scale(1); }
+  }
+
+  /* responsive */
+  @media (max-width:1000px){
+    .wrap{flex-direction:column; padding:20px;}
+    .controls{ width:90vw; max-width:90vw; }
+    .hero{ width:90vw; max-width:90vw; height:520px; }
+  }
+
+</style>
+</head>
+<body>
+  <div class="wrap" role="main" aria-label="Home Screen featuring quotes and audio-reactive visuals">
+    <section class="hero" aria-live="polite">
+      <div class="header">
+        <div>
+          <div class="title">AI & Humanity — Ahead</div>
+          <div class="sub">Rotating thoughts on technology guiding human flourishing</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="sub">Now playing:</div>
+          <div style="color:var(--accent); font-weight:600; font-size:13px;">goldberg_variations.mp3</div>
+        </div>
+      </div>
+
+      <div class="carousel" id="carousel">
+        <div class="quote-card" id="quoteCard" role="article" aria-label="Quote">
+          <!-- quote text inserted by JS -->
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="indicators" id="indicators"></div>
+        <div class="footer-note">Audio-reactive particles - low, mid, high each have a different color.</div>
+      </div>
+    </section>
+
+    <aside class="controls" aria-label="Audio and visual controls">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="audio-row" style="gap:10px">
+          <button class="play" id="btnPlay" aria-pressed="false">Play</button>
+          <button class="mute" id="btnMute">Mute</button>
+        </div>
+
+        <div style="text-align:right; font-size:13px; color:rgba(255,255,255,0.6)">
+          Visuals:
+          <label style="margin-left:6px;">
+            <input type="checkbox" id="toggleVisuals" checked /> Enabled
+          </label>
+        </div>
+      </div>
+
+      <div class="audio-row" style="align-items:center;">
+        <div style="min-width:60px;color:rgba(255,255,255,0.7);font-size:13px">Volume</div>
+        <div class="slider"><input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"></div>
+      </div>
+
+      <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="particles"></canvas>
+        </div>
+
+        <div class="spec-bars" aria-hidden="true" id="specBars" style="height:70px;">
+          <div class="spec" title="Bass / Low">
+            <div class="level" id="lowLevel" style="background:linear-gradient(90deg,#ff8a65,#ff5252); height:8px;"></div>
+          </div>
+          <div class="spec" title="Mid">
+            <div class="level" id="midLevel" style="background:linear-gradient(90deg,#a7f3d0,#34d399); height:8px;"></div>
+          </div>
+          <div class="spec" title="High">
+            <div class="level" id="highLevel" style="background:linear-gradient(90deg,#93c5fd,#7c3aed); height:8px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
+        <a href="#" onclick="event.preventDefault();" style="color:rgba(255,255,255,0.45);font-size:13px">Need help?</a>
+      </div>
+    </aside>
+  </div>
+
+  <!-- audio element (hidden controls; playback handled via JS) -->
+  <audio id="audioSource" src="goldberg_variations.mp3" crossorigin="anonymous"></audio>
+
+<script>
+/*
+  Audio-reactive quotes + particles
+  - Splits frequency data into low/mid/high
+  - Generates color-coded particles per band
+  - Makes the quote card "bounce" on detected beats
+  - Rotates quotes every few seconds (and on strong beats)
+*/
+
+/* === Quotes === */
+const quotes = [
+  "AI can be a compass — guiding societies toward wiser decisions, not replacing the moral work of humanity.",
+  "When designed with empathy, AI amplifies human capacity: more time for care, creativity, and community.",
+  "Augmented intelligence lets us see patterns we couldn't before, helping steer public health, climate action, and education.",
+  "AI is a collaborator — it magnifies our best intentions and surfaces risks we must thoughtfully manage.",
+  "Technology that augments human judgment can help democracy, not replace it: transparency and values matter.",
+  "From medicine to farming, AI’s insights can reduce waste, expand access, and unlock human flourishing.",
+  "The future isn't AI vs humans — it’s AI + humans co-creating a more resilient and humane world."
+];
+
+/* UI references */
+const quoteCard = document.getElementById('quoteCard');
+const indicators = document.getElementById('indicators');
+const carousel = document.getElementById('carousel');
+
+/* create indicators */
+let currentIndex = 0;
+quotes.forEach((q,i)=>{
+  const d = document.createElement('div');
+  d.classList.add('dot');
+  if(i===0) d.classList.add('active');
+  d.setAttribute('data-i', i);
+  d.addEventListener('click', ()=> { goTo(i, true); });
+  indicators.appendChild(d);
+});
+
+function renderQuote(i){
+  quoteCard.textContent = quotes[i];
+  // alt size tweak for longer quotes
+  if(quotes[i].length > 120) quoteCard.classList.add('small'); else quoteCard.classList.remove('small');
+  // aria live: update label
+  quoteCard.setAttribute('aria-label', 'Quote: ' + quotes[i]);
+  // indicator active
+  Array.from(indicators.children).forEach((dot, idx)=> dot.classList.toggle('active', idx===i));
+}
+renderQuote(0);
+
+/* rotate every N seconds, but also can be driven by beat */
+let rotateInterval = 7000;
+let rotateTimer = setInterval(()=> goTo((currentIndex+1) % quotes.length, true), rotateInterval);
+
+function goTo(targetIndex, user=false){
+  currentIndex = targetIndex;
+  renderQuote(currentIndex);
+  // animate rotation: slight rotate and fade-in effect via transform
+  quoteCard.style.transition = 'transform 420ms cubic-bezier(.22,.9,.3,1), box-shadow 300ms';
+  quoteCard.style.transform = 'rotateX(8deg) translateY(-6px)';
+  setTimeout(()=> quoteCard.style.transform = 'none', 420);
+
+  // restart rotation timer if user manually changed
+  if(user){
+    clearInterval(rotateTimer);
+    rotateTimer = setInterval(()=> goTo((currentIndex+1) % quotes.length, false), rotateInterval);
+  }
+}
+
+/* === Audio setup === */
+const audioEl = document.getElementById('audioSource');
+const btnPlay = document.getElementById('btnPlay');
+const btnMute = document.getElementById('btnMute');
+const volSlider = document.getElementById('volume');
+const toggleVisuals = document.getElementById('toggleVisuals');
+
+let audioCtx, sourceNode, analyser, dataArray, bufferLength, gainNode;
+let isPlaying = false;
+let rafId = null;
+
+/* Canvas & particles */
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+const particles = [];
+let cw=0,ch=0;
+function resizeCanvas(){ cw = canvas.width = canvas.clientWidth * devicePixelRatio; ch = canvas.height = canvas.clientHeight * devicePixelRatio; }
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+/* particle class */
+class Particle {
+  constructor(x,y, vx, vy, color, life, size){
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.color = color; this.life = life; this.maxLife = life; this.size = size;
+    this.angle = Math.random()*Math.PI*2;
+  }
+  update(dt){
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vy += 0.000 * dt; // gravity small
+    this.life -= dt;
+    this.angle += 0.02 * dt;
+  }
+  draw(ctx){
+    const alpha = Math.max(0, this.life/this.maxLife);
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    ctx.globalAlpha = Math.max(0, alpha);
+    // soft circle
+    const g = ctx.createRadialGradient(0,0,this.size*0.2, 0,0,this.size);
+    g.addColorStop(0, hexToRgba(this.color, alpha));
+    g.addColorStop(1, hexToRgba(this.color, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0,0,this.size,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function hexToRgba(hex, a=1){
+  // simple hex (#rrggbb) to rgba
+  if(hex.startsWith('#')) hex = hex.slice(1);
+  const r = parseInt(hex.slice(0,2),16);
+  const g = parseInt(hex.slice(2,4),16);
+  const b = parseInt(hex.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* spawn particles at a location */
+function spawnParticles(x, y, count, color, intensity=1, band='low'){
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = (Math.random()*0.8 + 0.2) * intensity * (band==='low' ? 0.6 : band==='mid' ? 0.9 : 1.2);
+    const vx = Math.cos(angle)*speed * (cw/900);
+    const vy = Math.sin(angle)*speed * (ch/900);
+    const size = (Math.random()*10 + 6) * (band==='low' ? 1.6 : band==='mid' ? 1.0 : 0.75) * (devicePixelRatio||1);
+    particles.push(new Particle(x + (Math.random()-0.5)*40, y + (Math.random()-0.5)*40, vx, vy, color, 0.6 + Math.random()*0.6, size));
+  }
+}
+
+/* animation loop */
+let lastTime = performance.now();
+function animate(t){
+  const now = t;
+  const dt = Math.min(0.06, (now - lastTime) / 1000); // cap dt
+  lastTime = now;
+
+  // clear with slight alpha for trailing effect
+  ctx.fillStyle = "rgba(4,9,18,0.18)";
+  ctx.fillRect(0,0,cw,ch);
+
+  // draw subtle glow center
+  const gradient = ctx.createRadialGradient(cw*0.5, ch*0.35, 0, cw*0.5, ch*0.35, Math.max(cw,ch)*0.9);
+  gradient.addColorStop(0, "rgba(8,16,28,0.08)");
+  gradient.addColorStop(1, "rgba(8,16,28,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0,0,cw,ch);
+
+  // update/draw particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.update(dt*60);
+    p.draw(ctx);
+    if(p.life <= 0) particles.splice(i,1);
+  }
+
+  // fade spec bars handled elsewhere
+
+  rafId = requestAnimationFrame(animate);
+}
+
+/* === Web Audio initialization === */
+function initAudio(){
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  sourceNode = audioCtx.createMediaElementSource(audioEl);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048; // decent resolution
+  bufferLength = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLength);
+
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = volSlider.value;
+
+  sourceNode.connect(gainNode);
+  gainNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+
+  // start animation
+  cancelAnimationFrame(rafId);
+  lastTime = performance.now();
+  rafId = requestAnimationFrame(animate);
+
+  // start the audio reactive loop
+  audioReactiveLoop();
+}
+
+/* map frequency bin index to frequency */
+function binFreq(index){
+  const nyquist = audioCtx.sampleRate / 2;
+  return index * nyquist / bufferLength;
+}
+
+/* === audio reactive loop === */
+let beatHold = 0;
+let lastBeatTime = 0;
+function audioReactiveLoop(){
+  if(!analyser) return;
+
+  analyser.getByteFrequencyData(dataArray);
+
+  // define three bands in Hz
+  // low: 20 - 250 Hz
+  // mid: 250 - 4000 Hz
+  // high: 4000 - nyquist
+  const lowRange = [20, 250];
+  const midRange = [250, 4000];
+  const highRange = [4000, audioCtx.sampleRate/2];
+
+  // helper to sum magnitudes in a freq range
+  function sumInRange(range){
+    const [f1,f2] = range;
+    let sum = 0, count = 0;
+    for(let i=0;i<bufferLength;i++){
+      const f = binFreq(i);
+      if(f >= f1 && f < f2){
+        sum += dataArray[i];
+        count++;
+      }
+    }
+    if(count === 0) return 0;
+    return sum / count; // average magnitude 0-255
+  }
+
+  const low = sumInRange(lowRange) / 255;
+  const mid = sumInRange(midRange) / 255;
+  const high = sumInRange(highRange) / 255;
+
+  // update spec bars
+  const lowBar = document.getElementById('lowLevel');
+  const midBar = document.getElementById('midLevel');
+  const highBar = document.getElementById('highLevel');
+  lowBar.style.height = Math.max(6, low * 100) + 'px';
+  midBar.style.height = Math.max(6, mid * 100) + 'px';
+  highBar.style.height = Math.max(6, high * 100) + 'px';
+
+  // particle colors for bands
+  const colorLow = "#ff6b35";   // warm orange/red
+  const colorMid = "#34d399";   // fresh green
+  const colorHigh = "#7c3aed";  // violet/blue
+
+  // create particles based on magnitude and whether visuals enabled
+  if(toggleVisuals.checked){
+    // spawn at random horizontal positions within canvas; low centered lower, mid center, high upper
+    if(low > 0.08){
+      const intensity = Math.min(3, low * 6);
+      spawnParticles(cw * 0.5, ch * 0.75, Math.floor(6 * intensity), colorLow, intensity, 'low');
+    }
+    if(mid > 0.06){
+      const intensity = Math.min(3, mid * 5);
+      spawnParticles(cw * 0.5 + (Math.random()-0.5)*200, ch * 0.5, Math.floor(5 * intensity), colorMid, intensity, 'mid');
+    }
+    if(high > 0.04){
+      const intensity = Math.min(3, high * 8);
+      spawnParticles(cw * 0.5 + (Math.random()-0.5)*400, ch * 0.3, Math.floor(4 * intensity), colorHigh, intensity, 'high');
+    }
+  }
+
+  // beat detection - simple energy-based
+  const energy = (low*0.6 + mid*0.3 + high*0.1);
+  const now = audioCtx.currentTime;
+  const beatThreshold = 0.22; // tuned threshold (adjustable)
+  if(energy > beatThreshold && (now - lastBeatTime) > 0.18){
+    lastBeatTime = now;
+    // cause quote card to bounce
+    quoteCard.classList.remove('bounce');
+    // forced reflow to restart animation
+    void quoteCard.offsetWidth;
+    quoteCard.classList.add('bounce');
+
+    // on strong beat advance to next quote sometimes
+    if(energy > 0.36){
+      goTo((currentIndex+1) % quotes.length, false);
+    }
+
+    // also spawn a focused burst
+    if(toggleVisuals.checked){
+      const intensity = Math.min(6, energy * 8);
+      spawnParticles(cw*0.5, ch*0.5, Math.floor(12 * intensity), '#fff2', intensity, 'mix');
+    }
+  }
+
+  // schedule next analysis frame
+  requestAnimationFrame(audioReactiveLoop);
+}
+
+/* === Controls behavior === */
+btnPlay.addEventListener('click', async ()=>{
+  if(!audioCtx) initAudio();
+  try{
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+  } catch(e){
+    console.warn('resume failed', e);
+  }
+
+  if(!isPlaying){
+    try {
+      await audioEl.play();
+      isPlaying = true;
+      btnPlay.textContent = 'Pause';
+      btnPlay.setAttribute('aria-pressed','true');
+    } catch(e){
+      console.warn('autoplay blocked', e);
+      // fallback: show hint to the user
+      alert('Playback was blocked by the browser. Please allow audio playback by interacting with the page (click Play again).');
+    }
+  } else {
+    audioEl.pause();
+    isPlaying = false;
+    btnPlay.textContent = 'Play';
+    btnPlay.setAttribute('aria-pressed','false');
+  }
+});
+
+btnMute.addEventListener('click', ()=>{
+  if(!audioCtx) initAudio();
+  audioEl.muted = !audioEl.muted;
+  btnMute.textContent = audioEl.muted ? 'Unmute' : 'Mute';
+});
+
+volSlider.addEventListener('input', (e)=>{
+  if(!audioCtx) initAudio();
+  const v = parseFloat(e.target.value);
+  if(gainNode) gainNode.gain.value = v;
+});
+
+/* when audio ends, reset UI */
+audioEl.addEventListener('ended', ()=>{
+  isPlaying = false;
+  btnPlay.textContent = 'Play';
+  btnPlay.setAttribute('aria-pressed','false');
+});
+
+/* defensive: if user drags visuals toggle while running, clear particles */
+toggleVisuals.addEventListener('change', ()=>{
+  if(!toggleVisuals.checked){
+    particles.length = 0;
+    // lightly dim canvas
+    ctx.fillStyle = "rgba(4,9,18,0.6)";
+    ctx.fillRect(0,0,cw,ch);
+  }
+});
+
+/* nice: click on canvas to create manual burst */
+document.getElementById('canvasWrap').addEventListener('click',(ev)=>{
+  if(!toggleVisuals.checked) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (ev.clientX - rect.left) * devicePixelRatio;
+  const y = (ev.clientY - rect.top) * devicePixelRatio;
+  spawnParticles(x, y, 40, "#ffd166", 2, 'mix');
+});
+
+/* initialize a subtle motion for the carousel using requestAnimationFrame */
+let wobble = 0;
+(function idleWobble(){
+  wobble += 0.008;
+  const x = Math.sin(wobble) * 6;
+  carousel.style.transform = `translateX(${x}px)`;
+  requestAnimationFrame(idleWobble);
+})();
+
+/* start with a faint visual: small ambient particles */
+for(let i=0;i<40;i++){
+  spawnParticles(Math.random()*cw, Math.random()*ch, 0, ["#ff6b35","#34d399","#7c3aed"][Math.floor(Math.random()*3)], 0.2, 'ambient');
+}
+
+/* accessibility: keyboard left/right to navigate quotes */
+window.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowRight') goTo((currentIndex+1) % quotes.length, true);
+  if(e.key === 'ArrowLeft') goTo((currentIndex-1 + quotes.length) % quotes.length, true);
+});
+
+/* ensure audio context created only after user gesture when possible (some browsers require) */
+document.addEventListener('click', function ensureAudioOnce(){
+  // create audio context and nodes on first click to reduce autoplay blocks later
+  if(!audioCtx){
+    try{ initAudio(); }catch(e){}
+  }
+  document.removeEventListener('click', ensureAudioOnce);
+});
+</script>
+</body>
+</html>
