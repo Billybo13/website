@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI + Humanity — Music Visualizer</title>
+<title>AI + Humanity — Music Visualizer (Balanced)</title>
 <style>
 html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
 canvas { position:fixed; inset:0; z-index:0; }
@@ -64,10 +64,11 @@ button{
 
 <script>
 /* ====== Config ====== */
-const AUDIO_FILE = "Dubdeath .wav"; // keep the exact spacing/case
+const AUDIO_FILE = "Dubdeath .wav"; // exact filename (space included)
 const BASE_PARTICLE_COUNT = 720;
-const FLARE_POOL_SIZE = 48;      // slightly toned down
-const CORE_RADIUS = 140;         // repel anything inside this radius
+const FLARE_POOL_SIZE = 36;         // fewer, subtler
+const CORE_RADIUS = 130;            // smaller core exclusion
+const CENTER_CONTAIN = 0.012;       // gentle pull toward center to avoid corner clumping
 
 /* ====== Quotes / Cylinder ====== */
 const quotes = [
@@ -119,7 +120,7 @@ const clamp = (x,a,b)=> Math.min(b, Math.max(a, x));
 
 const pointer = { x: innerWidth/2, y: innerHeight/2, active:false, strength:1.0, linger:0.0 };
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-if (isTouch) pointer.strength = 2.2;
+if (isTouch) pointer.strength = 2.0;
 
 addEventListener("mousemove", e => { pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
 addEventListener("mousedown", () => { pointer.active=true; pointer.linger=1.0; });
@@ -133,69 +134,74 @@ class Particle {
   constructor(){
     this.x = Math.random()*canvas.width;
     this.y = Math.random()*canvas.height;
-    this.vx = (Math.random()-0.5)*0.25;
-    this.vy = (Math.random()-0.5)*0.25;
+    this.vx = (Math.random()-0.5)*0.22;
+    this.vy = (Math.random()-0.5)*0.22;
     this.baseSize = 0.6 + Math.random()*0.9; // tiny
     this.size = this.baseSize;
     this.hue = Math.random()*360;
     this.color = `hsl(${this.hue},100%,70%)`;
   }
-  update(bassN, midN, trebN, centroidN, beatBoost){
-    // drift + wrap
+  update(bassN, midN, trebN, centroidN, beatBoost, musicScale){
+    // base drift + wrap
     this.x += this.vx; this.y += this.vy;
     if(this.x<0) this.x = canvas.width; if(this.x>canvas.width) this.x = 0;
     if(this.y<0) this.y = canvas.height; if(this.y>canvas.height) this.y = 0;
 
-    // pointer attraction
+    // soft containment toward center (prevents corners from hoarding)
+    const cx = canvas.width/2, cy = canvas.height/2;
+    const dxc = cx - this.x, dyc = cy - this.y;
+    this.vx += dxc * CENTER_CONTAIN * 0.0015;
+    this.vy += dyc * CENTER_CONTAIN * 0.0015;
+
+    // pointer attraction (wins over music)
     const dxp = pointer.x - this.x, dyp = pointer.y - this.y;
     const distp = Math.hypot(dxp,dyp) || 1;
-    const range = isTouch ? 300 : 220;
+    const range = isTouch ? 280 : 220;
     if (distp < range) {
-      const f = (1 - distp/range) * 0.14 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
+      const f = (1 - distp/range) * 0.12 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
       this.vx += (dxp/distp)*f; this.vy += (dyp/distp)*f;
     }
 
-    // music forces
-    const cx = canvas.width/2, cy = canvas.height/2;
+    // music forces (scaled down when pointer is active/lingering)
     const rx = this.x - cx, ry = this.y - cy;
     const rdist = Math.hypot(rx, ry) || 1;
 
-    // Core repulsion (prevents middle blob)
+    // core repulsion only when close & some energy, prevents center blob
     if (rdist < CORE_RADIUS) {
-      const repel = (1 - rdist/CORE_RADIUS) * 1.6; // strong near center
+      const repel = (1 - rdist/CORE_RADIUS) * 0.8 * (0.4 + bassN*0.6); // weaker than before
       this.vx += (rx/rdist) * repel;
       this.vy += (ry/rdist) * repel;
     }
 
-    // Bass: outward push only (no inward collapse)
-    const bassPush = bassN * 1.1;
+    // Bass: gentle outward breathing (no constant shove)
+    const bassPush = bassN * 0.45 * musicScale;
     this.vx += (rx/rdist) * bassPush;
     this.vy += (ry/rdist) * bassPush;
 
-    // Mid: swirl
+    // Mid: softer swirl
     const tx = -ry/rdist, ty = rx/rdist;
-    this.vx += tx * midN * 1.0;
-    this.vy += ty * midN * 1.0;
+    this.vx += tx * midN * 0.55 * musicScale;
+    this.vy += ty * midN * 0.55 * musicScale;
 
-    // Treble: jitter (FIXED: use Math.random() )
-    this.vx += (Math.random() - 0.5) * trebN * 1.0;
-    this.vy += (Math.random() - 0.5) * trebN * 1.0;
+    // Treble: mild jitter
+    this.vx += (Math.random() - 0.5) * trebN * 0.35 * musicScale;
+    this.vy += (Math.random() - 0.5) * trebN * 0.35 * musicScale;
 
-    // Beat pop: outward kick
+    // Beat: small extra outward kick
     if (beatBoost > 0.02) {
-      this.vx += (rx/rdist) * beatBoost * 1.0;
-      this.vy += (ry/rdist) * beatBoost * 1.0;
+      this.vx += (rx/rdist) * beatBoost * 0.6 * musicScale;
+      this.vy += (ry/rdist) * beatBoost * 0.6 * musicScale;
     }
 
     // damping
-    this.vx *= 0.985; this.vy *= 0.985;
+    this.vx *= 0.988; this.vy *= 0.988;
 
     // size & color
-    const targetSize = this.baseSize + bassN*1.0 + beatBoost*0.9 + trebN*0.3;
-    this.size = lerp(this.size, targetSize, 0.18);
-    const targetHue = (centroidN*320 + bassN*40) % 360;
-    this.hue  = lerp(this.hue, targetHue, 0.15);
-    this.color = `hsl(${this.hue},100%,${60 + trebN*28}%)`;
+    const targetSize = this.baseSize + bassN*0.7 + beatBoost*0.6 + trebN*0.2;
+    this.size = lerp(this.size, targetSize, 0.15);
+    const targetHue = (centroidN*320 + bassN*30) % 360;
+    this.hue  = lerp(this.hue, targetHue, 0.12);
+    this.color = `hsl(${this.hue},100%,${60 + trebN*22}%)`;
   }
   draw(){
     ctx.shadowBlur = 6; ctx.shadowColor = this.color;
@@ -210,12 +216,12 @@ class Flare {
   constructor(){ this.alive=false; this.x=0; this.y=0; this.r=0; this.maxR=0; this.alpha=0; this.hue=0; }
   spawn(cx, cy, hue, power){
     this.alive = true;
-    this.x=cx; this.y=cy; this.r=10;
-    this.maxR = 140 + power*240;         // smaller than before
-    this.alpha = 0.28 + power*0.32;      // dimmer
+    this.x=cx; this.y=cy; this.r=8;
+    this.maxR = 120 + power*180;         // smaller
+    this.alpha = 0.22 + power*0.26;      // dimmer
     this.hue = hue;
   }
-  update(){ if(!this.alive) return; this.r += 5; this.alpha *= 0.93; if(this.r>this.maxR||this.alpha<0.01) this.alive=false; }
+  update(){ if(!this.alive) return; this.r += 4.5; this.alpha *= 0.92; if(this.r>this.maxR||this.alpha<0.01) this.alive=false; }
   draw(){
     if(!this.alive) return;
     const grad = ctx.createRadialGradient(this.x, this.y, this.r*0.2, this.x, this.y, this.r);
@@ -243,7 +249,7 @@ btn.addEventListener("click", () => {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.6;
+      analyser.smoothingTimeConstant = 0.65;
       analyser.minDecibels = -95;
       analyser.maxDecibels = -5;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -314,7 +320,7 @@ addEventListener("touchmove", e => {
 },{passive:false});
 addEventListener("touchend",  () => { dragging=false; pointer.active=false; });
 
-/* ====== Main loop ====== */
+/* ====== Main loop (balanced) ====== */
 let camShakeX = 0, camShakeY = 0, camZoom = 0;
 
 function animate(){
@@ -331,39 +337,47 @@ function animate(){
     rollFloor = Math.min(rollFloor/FLOOR_RISE, b01, m01, t01);
     const span = Math.max(0.06, rollPeak - rollFloor);
 
+    // normalize + gentle smoothing
     const nb = clamp((b01 - rollFloor)/span, 0, 1);
     const nm = clamp((m01 - rollFloor)/span, 0, 1);
     const nt = clamp((t01 - rollFloor)/span, 0, 1);
-
-    // smooth a bit
-    bassN = lerp(bassN, nb, 0.35);
-    midN  = lerp(midN,  nm, 0.35);
-    trebN = lerp(trebN, nt, 0.35);
+    bassN = lerp(bassN, nb, 0.28);
+    midN  = lerp(midN,  nm, 0.28);
+    trebN = lerp(trebN, nt, 0.28);
 
     const scHz = spectralCentroid();
     const nyquist = audioCtx.sampleRate/2;
     centroidN = clamp(scHz / nyquist, 0, 1);
 
-    const instantEnergy = (b01*2.0 + m01*1.2 + t01*0.6) / 3.8;
-    energyST = lerp(energyST, instantEnergy, 0.35);
+    const instantEnergy = (b01*1.7 + m01*1.1 + t01*0.6) / 3.4;
+    energyST = lerp(energyST, instantEnergy, 0.30);
     energyLT = lerp(energyLT, instantEnergy, 0.02);
     const diff = energyST - energyLT;
-    beatBoost = diff > 0 ? diff*1.8 : 0;
+    beatBoost = diff > 0 ? diff*1.4 : 0; // milder beat
 
-    // camera pulse (subtler)
-    camShakeX = lerp(camShakeX, (Math.random()-0.5) * beatBoost * 18, 0.4);
-    camShakeY = lerp(camShakeY, (Math.random()-0.5) * beatBoost * 18, 0.4);
-    camZoom   = lerp(camZoom, beatBoost * 0.03, 0.4);
+    // camera pulse — very subtle now
+    camShakeX = lerp(camShakeX, (Math.random()-0.5) * beatBoost * 10, 0.4);
+    camShakeY = lerp(camShakeY, (Math.random()-0.5) * beatBoost * 10, 0.4);
+    camZoom   = lerp(camZoom, beatBoost * 0.015, 0.4);
 
-    // flare on beats
-    if (beatBoost > 0.06) {
+    // occasional flare on stronger beats
+    if (beatBoost > 0.05) {
       const hue = (centroidN*320 + bassN*40) % 360;
       const f = flares.find(fl => !fl.alive);
       if (f) f.spawn(innerWidth/2, innerHeight/2, hue, beatBoost);
     }
   } else {
-    camShakeX *= 0.92; camShakeY *= 0.92; camZoom *= 0.92;
+    // decay all levels when paused so forces relax
+    bassN = lerp(bassN, 0, 0.15);
+    midN  = lerp(midN,  0, 0.15);
+    trebN = lerp(trebN, 0, 0.15);
+    centroidN = lerp(centroidN, 0.3, 0.05);
+    camShakeX *= 0.9; camShakeY *= 0.9; camZoom *= 0.9;
   }
+
+  // If user is interacting, reduce music influence so touch feels dominant
+  const pointerInfluence = pointer.active ? 0.6 : (pointer.linger * 0.4);
+  const musicScale = 1 - clamp(pointerInfluence, 0, 0.85);
 
   // canvas transform
   ctx.setTransform(1,0,0,1,0,0);
@@ -374,9 +388,9 @@ function animate(){
   ctx.translate(-canvas.width/2, -canvas.height/2);
 
   // particles
-  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost); p.draw(); }
+  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost, musicScale); p.draw(); }
 
-  // flares (lighter blend only for flares)
+  // flares
   ctx.globalCompositeOperation = 'lighter';
   for(const fl of flares){ fl.update(); fl.draw(); }
   ctx.globalCompositeOperation = 'source-over';
@@ -387,15 +401,15 @@ function animate(){
   applyRotation();
 
   // panel glow
-  const hue = (centroidN*320 + bassN*40) % 360;
-  const glowSize = Math.max(12, trebN*34 + beatBoost*42);
+  const hue = (centroidN*320 + bassN*30) % 360;
+  const glowSize = Math.max(10, trebN*26 + beatBoost*28);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
   panels.forEach(el => el.style.textShadow = "");
   let idx = Math.round(rotationY / (360 / panelCount)) % panelCount; if (idx < 0) idx += panelCount;
   panels[idx].style.textShadow = glow;
 
   // ring shimmer
-  ring.style.opacity = String(0.25 + trebN * 0.28);
+  ring.style.opacity = String(0.25 + trebN * 0.24);
 
   requestAnimationFrame(animate);
 }
