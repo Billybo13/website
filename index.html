@@ -192,7 +192,7 @@ btn.addEventListener("click", () => {
       analyser.maxDecibels = -10;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-      fetch("goldberg_variations.mp3") /* swap to your WAV later */
+      fetch("Dubdeath .wav") /* swap to your WAV later */
         .then(r => r.arrayBuffer())
         .then(b => audioCtx.decodeAudioData(b))
         .then(decoded => {
