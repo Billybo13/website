@@ -5,65 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI + Humanity Carousel</title>
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: black;
-  color: white;
-  height: 100%;
+html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
+canvas { position:fixed; inset:0; z-index:0; }
+.carousel-container { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); perspective:2000px; width:80vw; height:30vh; z-index:1; }
+.carousel { width:100%; height:100%; transform-style:preserve-3d; }
+.carousel-panel{
+  position:absolute; width:80vw; height:30vh; display:flex; justify-content:center; align-items:center;
+  font-size:clamp(1rem,2.2vw,2.5rem); font-weight:700; text-align:center; padding:2vw; box-sizing:border-box;
+  background:rgba(0,0,0,0.4); border-radius:1vw; backdrop-filter:blur(6px); transition:text-shadow .2s ease;
 }
-canvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 0;
-}
-.carousel-container {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  perspective: 2000px;
-  width: 80vw;
-  height: 30vh;
-  z-index: 1;
-}
-.carousel {
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-}
-.carousel-panel {
-  position: absolute;
-  width: 80vw;
-  height: 30vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: clamp(1rem, 2.2vw, 2.5rem);
-  font-weight: bold;
-  text-align: center;
-  padding: 2vw;
-  box-sizing: border-box;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 1vw;
-  backdrop-filter: blur(4px);
-  transition: text-shadow 0.2s ease;
-}
-button {
-  position: fixed;
-  top: 1rem;
-  left: 1rem;
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
-  background: teal;
-  border: none;
-  border-radius: 0.5rem;
-  color: white;
-  cursor: pointer;
-  z-index: 2;
-}
+button{ position:fixed; top:1rem; left:1rem; padding:.5rem 1rem; font-size:1rem; background:teal; border:0; border-radius:.5rem; color:#fff; cursor:pointer; z-index:2; }
 </style>
 </head>
 <body>
@@ -76,6 +27,7 @@ button {
 <button id="toggleAudio">Play</button>
 
 <script>
+/* ---------- Quotes / Carousel ---------- */
 const quotes = [
   "AI will enhance human creativity, not replace it.",
   "Technology can amplify empathy and understanding.",
@@ -85,98 +37,140 @@ const quotes = [
   "AI can guide us toward sustainable innovation."
 ];
 
-// Build carousel
 const carousel = document.getElementById("carousel");
 const panelCount = quotes.length;
 const panelWidth = 0.8 * window.innerWidth;
 const radius = Math.round((panelWidth / 2) / Math.tan(Math.PI / panelCount));
 
-quotes.forEach((quote, i) => {
-  const panel = document.createElement("div");
-  panel.className = "carousel-panel";
-  panel.textContent = quote;
+quotes.forEach((q, i) => {
+  const el = document.createElement("div");
+  el.className = "carousel-panel";
+  el.textContent = q;
   const angle = (360 / panelCount) * i;
-  panel.style.transform = `rotateY(${angle}deg) translateZ(${radius}px)`;
-  carousel.appendChild(panel);
+  el.style.transform = `rotateY(${angle}deg) translateZ(${radius}px)`;
+  carousel.appendChild(el);
 });
 const panels = document.querySelectorAll(".carousel-panel");
 
-// Particle setup
+/* ---------- Canvas / Particles ---------- */
 const canvas = document.getElementById("bg");
-const ctx = canvas.getContext("2d");
-let particles = [];
-let pointerX = window.innerWidth / 2;
-let pointerY = window.innerHeight / 2;
+const ctx = canvas.getContext("2d", { alpha: true });
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+addEventListener("resize", resize); resize();
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
+function lerp(a,b,t){ return a + (b-a)*t; }
+
+const pointer = {
+  x: innerWidth/2,
+  y: innerHeight/2,
+  active: false,
+  strength: 1,       // scaled up on mobile
+  linger: 0.0        // decays when not active
+};
+// detect touch-capable device (very simple heuristic)
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+if (isTouch) { pointer.strength = 1.8; }
+
+addEventListener("mousemove", e => {
+  pointer.x = e.clientX;
+  pointer.y = e.clientY;
+  pointer.active = true;
+  pointer.linger = 1.0;
+});
+addEventListener("mousedown", e => { pointer.active = true; pointer.linger = 1.0; });
+addEventListener("mouseup",   e => { pointer.active = false; });
+
+addEventListener("touchstart", e => {
+  pointer.x = e.touches[0].clientX;
+  pointer.y = e.touches[0].clientY;
+  pointer.active = true;
+  pointer.linger = 1.0;
+},{passive:false});
+addEventListener("touchmove", e => {
+  e.preventDefault();
+  pointer.x = e.touches[0].clientX;
+  pointer.y = e.touches[0].clientY;
+  pointer.active = true;
+  pointer.linger = 1.0;
+},{passive:false});
+addEventListener("touchend", e => {
+  pointer.active = false;
+  // linger decays in the loop
+});
 
 class Particle {
-  constructor() { this.reset(); }
-  reset() {
-    this.x = Math.random() * canvas.width;
-    this.y = Math.random() * canvas.height;
-    this.vx = (Math.random() - 0.5) * 0.4;
-    this.vy = (Math.random() - 0.5) * 0.4;
-    this.size = 1 + Math.random() * 2;
-    this.color = "rgba(255,255,255,0.8)";
+  constructor(){
+    this.x = Math.random()*canvas.width;
+    this.y = Math.random()*canvas.height;
+    this.vx = (Math.random()-0.5)*0.3;
+    this.vy = (Math.random()-0.5)*0.3;
+    this.baseSize = 1 + Math.random()*2;
+    this.size = this.baseSize;
+    this.hue = Math.random()*360;
+    this.color = `hsl(${this.hue},100%,70%)`;
   }
-  update(bass, mid, treble) {
-    // Gentle drift
+  update(bass, mid, treble){
+    // soft galaxy drift
     this.x += this.vx;
     this.y += this.vy;
 
-    // Wrap around edges
-    if (this.x < 0) this.x = canvas.width;
-    if (this.x > canvas.width) this.x = 0;
-    if (this.y < 0) this.y = canvas.height;
-    if (this.y > canvas.height) this.y = 0;
+    // wrap
+    if(this.x < 0) this.x = canvas.width;
+    if(this.x > canvas.width) this.x = 0;
+    if(this.y < 0) this.y = canvas.height;
+    if(this.y > canvas.height) this.y = 0;
 
-    // Pointer attraction
-    let dx = pointerX - this.x;
-    let dy = pointerY - this.y;
-    let dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 150) { // pull range
-      let force = (150 - dist) / 150;
-      this.vx += (dx / dist) * force * 0.05;
-      this.vy += (dy / dist) * force * 0.05;
+    // pointer attraction (works on desktop + touch; also lingers)
+    const pullX = pointer.x - this.x;
+    const pullY = pointer.y - this.y;
+    const dist = Math.hypot(pullX, pullY);
+    const radius = 220; // attraction radius
+    if (dist < radius) {
+      const f = (1 - dist/radius) * 0.08 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
+      this.vx += (pullX / (dist || 1)) * f;
+      this.vy += (pullY / (dist || 1)) * f;
     }
 
-    // Music reactivity
-    const hue = (treble * 3 + bass) % 360;
-    this.color = `hsl(${hue}, 100%, ${60 + bass / 4}%)`;
-    this.size = 1 + bass / 80;
+    // audio reactivity — smoothed size & hue
+    // (avoid big jump: lerp toward target size)
+    const targetSize = this.baseSize + Math.max(0, bassNorm*0.8 + trebleNorm*0.4);
+    this.size = lerp(this.size, targetSize, 0.08);
+
+    const targetHue = (trebleNorm*240 + bassNorm*80) % 360;
+    this.hue = lerp(this.hue, targetHue, 0.08);
+    this.color = `hsl(${this.hue}, 100%, ${65 + bassNorm*20}%)`;
   }
-  draw() {
+  draw(){
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
     ctx.fillStyle = this.color;
     ctx.fill();
   }
 }
 
-for (let i = 0; i < 300; i++) particles.push(new Particle());
+// create particles
+const particles = Array.from({length: 320}, () => new Particle());
 
-// Audio setup
-let audioCtx, analyser, dataArray, source;
-let isPlaying = false;
-const audioBtn = document.getElementById("toggleAudio");
+/* ---------- Web Audio (smoothed) ---------- */
+let audioCtx, analyser, dataArray, source, isPlaying=false;
+let bassAvg=0, midAvg=0, trebleAvg=0;     // raw averages
+let bassNorm=0, midNorm=0, trebleNorm=0;  // normalized 0..1 (smoothed)
 
-audioBtn.addEventListener("click", () => {
+const btn = document.getElementById("toggleAudio");
+btn.addEventListener("click", () => {
   if (!isPlaying) {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.8;
+      analyser.minDecibels = -90;
+      analyser.maxDecibels = -10;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       fetch("goldberg_variations.mp3")
-        .then(res => res.arrayBuffer())
-        .then(buf => audioCtx.decodeAudioData(buf))
+        .then(r => r.arrayBuffer())
+        .then(b => audioCtx.decodeAudioData(b))
         .then(decoded => {
           source = audioCtx.createBufferSource();
           source.buffer = decoded;
@@ -184,108 +178,87 @@ audioBtn.addEventListener("click", () => {
           analyser.connect(audioCtx.destination);
           source.start(0);
           isPlaying = true;
-          audioBtn.textContent = "Pause";
+          btn.textContent = "Pause";
         });
     } else {
       audioCtx.resume();
       isPlaying = true;
-      audioBtn.textContent = "Pause";
+      btn.textContent = "Pause";
     }
   } else {
     audioCtx.suspend();
     isPlaying = false;
-    audioBtn.textContent = "Play";
+    btn.textContent = "Play";
   }
 });
 
-function avg(arr) {
-  let sum = 0;
-  for (let v of arr) sum += v;
-  return sum / arr.length;
+function bandAvg(buf, start, end){
+  let s=0; for(let i=start;i<end;i++) s+=buf[i]; return s/Math.max(1,(end-start));
 }
 
-// Carousel interaction
+/* ---------- Carousel interaction ---------- */
 let rotationY = 0;
-let rotationSpeed = 0.2;
-let isDragging = false;
-let lastX = 0;
+let rotationSpeed = 0.2; // default clockwise
+let dragging = false, lastX = 0;
 
-function applyCarouselRotation() {
-  carousel.style.transform = `rotateY(${rotationY}deg)`;
-}
-function startDrag(x) {
-  isDragging = true;
-  lastX = x;
-}
-function dragMove(x) {
-  if (!isDragging) return;
-  let delta = x - lastX;
-  lastX = x;
-  rotationSpeed = delta * 0.1;
-}
-function endDrag() {
-  isDragging = false;
-}
+function applyCarouselRotation(){ carousel.style.transform = `rotateY(${rotationY}deg)`; }
+addEventListener("mousedown", e => { dragging=true; lastX=e.clientX; pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
+addEventListener("mousemove", e => { if(dragging){ rotationSpeed = (e.clientX-lastX)*0.1; lastX=e.clientX; } pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
+addEventListener("mouseup",   () => { dragging=false; pointer.active=false; });
 
-window.addEventListener("mousedown", e => startDrag(e.clientX));
-window.addEventListener("mousemove", e => dragMove(e.clientX));
-window.addEventListener("mouseup", endDrag);
+addEventListener("touchstart", e => { const x=e.touches[0].clientX, y=e.touches[0].clientY; dragging=true; lastX=x; pointer.x=x; pointer.y=y; pointer.active=true; pointer.linger=1.0; }, {passive:false});
+addEventListener("touchmove",  e => { e.preventDefault(); const x=e.touches[0].clientX, y=e.touches[0].clientY; if(dragging){ rotationSpeed = (x-lastX)*0.1; lastX=x; } pointer.x=x; pointer.y=y; pointer.active=true; pointer.linger=1.0; }, {passive:false});
+addEventListener("touchend",   () => { dragging=false; pointer.active=false; });
 
-window.addEventListener("touchstart", e => {
-  pointerX = e.touches[0].clientX;
-  pointerY = e.touches[0].clientY;
-  startDrag(pointerX);
-});
-window.addEventListener("touchmove", e => {
-  e.preventDefault();
-  pointerX = e.touches[0].clientX;
-  pointerY = e.touches[0].clientY;
-  dragMove(pointerX);
-}, { passive: false });
-window.addEventListener("touchend", endDrag);
+/* ---------- Main loop ---------- */
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-window.addEventListener("mousemove", e => {
-  pointerX = e.clientX;
-  pointerY = e.clientY;
-});
+  // linger decay (so touch still influences briefly after lift)
+  if (!pointer.active && pointer.linger > 0) pointer.linger = Math.max(0, pointer.linger - 0.01);
 
-function animate() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  let bass = 0, mid = 0, treble = 0;
-  if (isPlaying && analyser) {
+  // audio analysis
+  if(isPlaying && analyser){
     analyser.getByteFrequencyData(dataArray);
-    const bassEnd = Math.floor(dataArray.length * 0.1);
-    const midEnd = Math.floor(dataArray.length * 0.4);
-    bass = avg(dataArray.slice(0, bassEnd));
-    mid = avg(dataArray.slice(bassEnd, midEnd));
-    treble = avg(dataArray.slice(midEnd));
+    const n = dataArray.length;
+    const bEnd = Math.floor(n*0.12);
+    const mEnd = Math.floor(n*0.45);
+
+    bassAvg   = bandAvg(dataArray, 0, bEnd);
+    midAvg    = bandAvg(dataArray, bEnd, mEnd);
+    trebleAvg = bandAvg(dataArray, mEnd, n);
+
+    // Normalize roughly 0..1 (tuned) & smooth
+    const nb = Math.min(1, bassAvg/140);
+    const nm = Math.min(1, midAvg/140);
+    const nt = Math.min(1, trebleAvg/140);
+    bassNorm   = lerp(bassNorm, nb, 0.15);
+    midNorm    = lerp(midNorm,  nm, 0.15);
+    trebleNorm = lerp(trebleNorm, nt, 0.15);
   }
 
-  // Carousel rotation
+  // carousel rotation (eases back to default clockwise)
   rotationY += rotationSpeed;
-  if (!isDragging) {
-    if (Math.abs(rotationSpeed) < 0.2) {
-      rotationSpeed += (0.2 - rotationSpeed) * 0.05;
-    }
+  if(!dragging){
+    const target = 0.2;
+    rotationSpeed = lerp(rotationSpeed, target, 0.05);
   }
   applyCarouselRotation();
 
-  // Particles update/draw
-  particles.forEach(p => { p.update(bass, mid, treble); p.draw(); });
+  // particles
+  for(const p of particles){ p.update(bassNorm*200, midNorm*200, trebleNorm*200); p.draw(); }
 
-  // Glow
-  const hue = (treble * 3 + bass) % 360;
-  const glowSize = Math.max(10, treble / 1.5);
+  // glow on front panel
+  const hue = (trebleNorm*240 + bassNorm*80) % 360;
+  const glowSize = Math.max(10, trebleNorm*30 + bassNorm*10);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
-  panels.forEach(panel => panel.style.textShadow = "");
-  let index = Math.round(rotationY / (360 / panelCount)) % panelCount;
-  if (index < 0) index += panelCount;
-  panels[index].style.textShadow = glow;
+  panels.forEach(el => el.style.textShadow = "");
+  let idx = Math.round(rotationY / (360 / panelCount)) % panelCount;
+  if (idx < 0) idx += panelCount;
+  panels[idx].style.textShadow = glow;
 
   requestAnimationFrame(animate);
 }
-
 animate();
 </script>
 </body>
