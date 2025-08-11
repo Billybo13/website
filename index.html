@@ -17,7 +17,7 @@ canvas {
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 0; /* background */
+  z-index: 0;
   pointer-events: none;
 }
 .carousel-container {
@@ -94,7 +94,7 @@ const quotes = [
 // Build carousel
 const carousel = document.getElementById('carousel');
 const panelCount = quotes.length;
-const panelWidth = 0.8 * window.innerWidth; // 80vw
+const panelWidth = 0.8 * window.innerWidth;
 const radius = Math.round((panelWidth / 2) / Math.tan(Math.PI / panelCount));
 
 quotes.forEach((quote, i) => {
@@ -133,9 +133,7 @@ window.addEventListener('mousemove', e => {
 });
 
 class Particle {
-  constructor() {
-    this.reset();
-  }
+  constructor() { this.reset(); }
   reset() {
     this.x = Math.random() * canvas.width;
     this.y = Math.random() * canvas.height;
@@ -145,21 +143,19 @@ class Particle {
     this.color = 'rgba(255,255,255,0.9)';
   }
   update(bass, mid, treble) {
-    // Update attraction point if mobile
+    // Apply wandering center *before* attraction
     if (mobileMode) {
       wanderAngle += 0.002;
-      const wanderRadius = 50;
-      const centerX = canvas.width / 2 + Math.cos(wanderAngle) * wanderRadius;
-      const centerY = canvas.height / 2 + Math.sin(wanderAngle) * wanderRadius;
-      mouseX = centerX;
-      mouseY = centerY;
+      const wanderRadius = 100; // larger drift
+      mouseX = canvas.width / 2 + Math.cos(wanderAngle) * wanderRadius;
+      mouseY = canvas.height / 2 + Math.sin(wanderAngle) * wanderRadius;
     }
 
-    // Parallax drift toward attraction point
+    // Attraction toward center/mouse
     this.vx += (mouseX - this.x) * 0.000002 * (1 + bass / 50);
     this.vy += (mouseY - this.y) * 0.000002 * (1 + bass / 50);
 
-    // Audio-reactive motion
+    // Audio-reactive jitter
     this.vx += (Math.random() - 0.5) * (bass / 25000);
     this.vy += (Math.random() - 0.5) * (treble / 25000);
 
@@ -182,9 +178,7 @@ class Particle {
   }
 }
 
-for (let i = 0; i < 250; i++) {
-  particles.push(new Particle());
-}
+for (let i = 0; i < 250; i++) particles.push(new Particle());
 
 // Audio setup
 let audioCtx, analyser, dataArray, source;
@@ -192,6 +186,12 @@ let isPlaying = false;
 const audioBtn = document.getElementById('toggleAudio');
 
 audioBtn.addEventListener('click', () => {
+  // Reset to center on toggle if still mobile
+  if (mobileMode) {
+    mouseX = window.innerWidth / 2;
+    mouseY = window.innerHeight / 2;
+  }
+  
   if (!isPlaying) {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -247,7 +247,7 @@ function animate() {
     p.draw();
   });
 
-  // Dynamic glow on front-facing panel
+  // Dynamic glow on active panel
   const hue = (treble * 3 + bass) % 360;
   const glowSize = Math.max(10, treble / 1.5);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
