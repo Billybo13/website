@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI + Humanity — Music Visualizer (Balanced)</title>
+<title>AI + Humanity — Music Visualizer (No-Stick Pointer)</title>
 <style>
 html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
 canvas { position:fixed; inset:0; z-index:0; }
@@ -66,9 +66,9 @@ button{
 /* ====== Config ====== */
 const AUDIO_FILE = "Dubdeath .wav"; // exact filename (space included)
 const BASE_PARTICLE_COUNT = 720;
-const FLARE_POOL_SIZE = 36;         // fewer, subtler
-const CORE_RADIUS = 130;            // smaller core exclusion
-const CENTER_CONTAIN = 0.012;       // gentle pull toward center to avoid corner clumping
+const FLARE_POOL_SIZE = 36;         // subtle
+const CORE_RADIUS = 130;            // small core exclusion
+const CENTER_CONTAIN = 0.012;       // gentle center containment
 
 /* ====== Quotes / Cylinder ====== */
 const quotes = [
@@ -118,16 +118,29 @@ addEventListener("resize", resize); resize();
 const lerp = (a,b,t)=> a + (b-a)*t;
 const clamp = (x,a,b)=> Math.min(b, Math.max(a, x));
 
-const pointer = { x: innerWidth/2, y: innerHeight/2, active:false, strength:1.0, linger:0.0 };
+/* --- Pointer (no lingering; reacts only to recent movement) --- */
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-if (isTouch) pointer.strength = 2.0;
-
-addEventListener("mousemove", e => { pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
-addEventListener("mousedown", () => { pointer.active=true; pointer.linger=1.0; });
-addEventListener("mouseup",   () => { pointer.active=false; });
-addEventListener("touchstart", e => { const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
-addEventListener("touchmove",  e => { e.preventDefault(); const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
-addEventListener("touchend",   () => { pointer.active=false; });
+const pointer = {
+  x: innerWidth/2,
+  y: innerHeight/2,
+  active: false,                                // true while pressed
+  strength: isTouch ? 2.0 : 1.0,
+  lastMove: 0                                    // timestamp of last move
+};
+function markMove(x, y){ pointer.x = x; pointer.y = y; pointer.lastMove = performance.now(); }
+// Mouse
+addEventListener('mousemove', e => { markMove(e.clientX, e.clientY); });
+addEventListener('mousedown', e => { pointer.active = true; markMove(e.clientX, e.clientY); });
+addEventListener('mouseup',   () => { pointer.active = false; });
+// Touch
+addEventListener('touchstart', e => {
+  const t = e.touches[0]; pointer.active = true; markMove(t.clientX, t.clientY);
+}, {passive:false});
+addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0]; markMove(t.clientX, t.clientY);
+}, {passive:false});
+addEventListener('touchend',  () => { pointer.active = false; });
 
 /* ----- Particles ----- */
 class Particle {
@@ -136,7 +149,7 @@ class Particle {
     this.y = Math.random()*canvas.height;
     this.vx = (Math.random()-0.5)*0.22;
     this.vy = (Math.random()-0.5)*0.22;
-    this.baseSize = 0.6 + Math.random()*0.9; // tiny
+    this.baseSize = 0.6 + Math.random()*0.9; // tiny speckles
     this.size = this.baseSize;
     this.hue = Math.random()*360;
     this.color = `hsl(${this.hue},100%,70%)`;
@@ -147,38 +160,42 @@ class Particle {
     if(this.x<0) this.x = canvas.width; if(this.x>canvas.width) this.x = 0;
     if(this.y<0) this.y = canvas.height; if(this.y>canvas.height) this.y = 0;
 
-    // soft containment toward center (prevents corners from hoarding)
+    // soft containment toward center
     const cx = canvas.width/2, cy = canvas.height/2;
     const dxc = cx - this.x, dyc = cy - this.y;
     this.vx += dxc * CENTER_CONTAIN * 0.0015;
     this.vy += dyc * CENTER_CONTAIN * 0.0015;
 
-    // pointer attraction (wins over music)
+    // pointer attraction (only with recent motion or active press)
     const dxp = pointer.x - this.x, dyp = pointer.y - this.y;
     const distp = Math.hypot(dxp,dyp) || 1;
     const range = isTouch ? 280 : 220;
-    if (distp < range) {
-      const f = (1 - distp/range) * 0.12 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
+    const now = performance.now();
+    const recent = Math.exp(-(now - pointer.lastMove) / 400); // 0..1 ~400ms
+    const pointerFactor = pointer.active ? 1.0 : recent;
+
+    if (distp < range && pointerFactor > 0.02) {
+      const f = (1 - distp/range) * 0.12 * pointer.strength * pointerFactor;
       this.vx += (dxp/distp)*f; this.vy += (dyp/distp)*f;
     }
 
-    // music forces (scaled down when pointer is active/lingering)
+    // music forces (tempered; scaled down when user is interacting)
     const rx = this.x - cx, ry = this.y - cy;
     const rdist = Math.hypot(rx, ry) || 1;
 
-    // core repulsion only when close & some energy, prevents center blob
+    // core repulsion near center based on bass (prevents center blob)
     if (rdist < CORE_RADIUS) {
-      const repel = (1 - rdist/CORE_RADIUS) * 0.8 * (0.4 + bassN*0.6); // weaker than before
+      const repel = (1 - rdist/CORE_RADIUS) * 0.8 * (0.4 + bassN*0.6);
       this.vx += (rx/rdist) * repel;
       this.vy += (ry/rdist) * repel;
     }
 
-    // Bass: gentle outward breathing (no constant shove)
+    // Bass: gentle outward breathing
     const bassPush = bassN * 0.45 * musicScale;
     this.vx += (rx/rdist) * bassPush;
     this.vy += (ry/rdist) * bassPush;
 
-    // Mid: softer swirl
+    // Mid: swirl
     const tx = -ry/rdist, ty = rx/rdist;
     this.vx += tx * midN * 0.55 * musicScale;
     this.vy += ty * midN * 0.55 * musicScale;
@@ -217,8 +234,8 @@ class Flare {
   spawn(cx, cy, hue, power){
     this.alive = true;
     this.x=cx; this.y=cy; this.r=8;
-    this.maxR = 120 + power*180;         // smaller
-    this.alpha = 0.22 + power*0.26;      // dimmer
+    this.maxR = 120 + power*180;
+    this.alpha = 0.22 + power*0.26;
     this.hue = hue;
   }
   update(){ if(!this.alive) return; this.r += 4.5; this.alpha *= 0.92; if(this.r>this.maxR||this.alpha<0.01) this.alive=false; }
@@ -305,22 +322,22 @@ let rotationSpeed = -0.25;
 let dragging = false, lastX = 0;
 function applyRotation(){ carousel.style.transform = `rotateY(${rotationY}deg)`; }
 
-addEventListener("mousedown", e => { dragging=true; lastX=e.clientX; pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
-addEventListener("mousemove", e => { if(dragging){ rotationSpeed = (e.clientX-lastX)*0.1; lastX=e.clientX; } pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
+addEventListener("mousedown", e => { dragging=true; lastX=e.clientX; markMove(e.clientX, e.clientY); pointer.active=true; });
+addEventListener("mousemove", e => { if(dragging){ rotationSpeed = (e.clientX-lastX)*0.1; lastX=e.clientX; } });
 addEventListener("mouseup",   () => { dragging=false; pointer.active=false; });
 
 addEventListener("touchstart", e => {
-  const t=e.touches[0]; dragging=true; lastX=t.clientX; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0;
+  const t=e.touches[0]; dragging=true; lastX=t.clientX; markMove(t.clientX, t.clientY); pointer.active=true;
 },{passive:false});
 addEventListener("touchmove", e => {
   e.preventDefault();
   const t=e.touches[0];
   if(dragging){ rotationSpeed = (t.clientX-lastX)*0.1; lastX=t.clientX; }
-  pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0;
+  markMove(t.clientX, t.clientY);
 },{passive:false});
 addEventListener("touchend",  () => { dragging=false; pointer.active=false; });
 
-/* ====== Main loop (balanced) ====== */
+/* ====== Main loop (balanced, no sticky pointer) ====== */
 let camShakeX = 0, camShakeY = 0, camZoom = 0;
 
 function animate(){
@@ -353,9 +370,9 @@ function animate(){
     energyST = lerp(energyST, instantEnergy, 0.30);
     energyLT = lerp(energyLT, instantEnergy, 0.02);
     const diff = energyST - energyLT;
-    beatBoost = diff > 0 ? diff*1.4 : 0; // milder beat
+    beatBoost = diff > 0 ? diff*1.4 : 0;
 
-    // camera pulse — very subtle now
+    // subtle camera pulse
     camShakeX = lerp(camShakeX, (Math.random()-0.5) * beatBoost * 10, 0.4);
     camShakeY = lerp(camShakeY, (Math.random()-0.5) * beatBoost * 10, 0.4);
     camZoom   = lerp(camZoom, beatBoost * 0.015, 0.4);
@@ -367,7 +384,7 @@ function animate(){
       if (f) f.spawn(innerWidth/2, innerHeight/2, hue, beatBoost);
     }
   } else {
-    // decay all levels when paused so forces relax
+    // decay to calm when paused
     bassN = lerp(bassN, 0, 0.15);
     midN  = lerp(midN,  0, 0.15);
     trebN = lerp(trebN, 0, 0.15);
@@ -375,8 +392,10 @@ function animate(){
     camShakeX *= 0.9; camShakeY *= 0.9; camZoom *= 0.9;
   }
 
-  // If user is interacting, reduce music influence so touch feels dominant
-  const pointerInfluence = pointer.active ? 0.6 : (pointer.linger * 0.4);
+  // Reduce music dominance when there's active/recent pointer motion
+  const now = performance.now();
+  const recent = Math.exp(-(now - pointer.lastMove) / 400);
+  const pointerInfluence = pointer.active ? 0.7 : (recent * 0.45);
   const musicScale = 1 - clamp(pointerInfluence, 0, 0.85);
 
   // canvas transform
