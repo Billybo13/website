@@ -3,9 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI + Humanity Carousel</title>
+<title>AI + Humanity — Music Visualizer</title>
 <style>
 html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
+
+/* Background canvas */
 canvas { position:fixed; inset:0; z-index:0; }
 
 /* Cylinder + quotes */
@@ -13,6 +15,8 @@ canvas { position:fixed; inset:0; z-index:0; }
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
   perspective:2000px; width:80vw; height:30vh; z-index:1;
 }
+
+/* Cylindrical backdrop ring */
 .cylinder-wrap { position:absolute; inset:0; transform-style:preserve-3d; pointer-events:none; z-index:0; }
 .ring-panel {
   position:absolute; left:50%; top:50%; transform-origin:center center;
@@ -32,15 +36,19 @@ canvas { position:fixed; inset:0; z-index:0; }
   -webkit-backdrop-filter: blur(2px) saturate(115%);
   box-shadow: inset 0 0 12px rgba(255,255,255,0.06), 0 0 24px rgba(0,0,0,0.28);
 }
+
+/* Quote faces — airy glass */
 .carousel { position:absolute; inset:0; transform-style:preserve-3d; z-index:1; }
 .carousel-panel{
   position:absolute; width:80vw; height:30vh; display:flex; justify-content:center; align-items:center;
   font-size:clamp(1rem,2.2vw,2.5rem); font-weight:700; text-align:center; padding:2vw; box-sizing:border-box;
+
   background: rgba(255,255,255,0.05);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 30px rgba(0,0,0,0.25);
+
   border-radius:1vw;
   transition:text-shadow .2s ease;
 }
@@ -64,9 +72,11 @@ button{
 
 <script>
 /* ====== Config ====== */
-const AUDIO_FILE = "Dubdeath .wav"; // keep the space exactly if your file has it
+const AUDIO_FILE = "Dubdeath .wav"; // keep the exact spacing/case
+const BASE_PARTICLE_COUNT = 720;     // fine-grain speckles
+const FLARE_POOL_SIZE = 64;          // big glow bursts on beats
 
-/* ====== Quotes / Cylinder build ====== */
+/* ====== Quotes / Cylinder ====== */
 const quotes = [
   "AI will enhance human creativity, not replace it.",
   "Technology can amplify empathy and understanding.",
@@ -105,7 +115,7 @@ for (let i = 0; i < segmentCount; i++) {
   ring.appendChild(seg);
 }
 
-/* ====== Canvas / Particles (soft glows) ====== */
+/* ====== Canvas / Visualizer ====== */
 const canvas = document.getElementById("bg");
 const ctx = canvas.getContext("2d", { alpha:true });
 function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
@@ -125,41 +135,66 @@ addEventListener("touchstart", e => { const t=e.touches[0]; pointer.x=t.clientX;
 addEventListener("touchmove",  e => { e.preventDefault(); const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
 addEventListener("touchend",   () => { pointer.active=false; });
 
+/* ----- Particles (speckles) ----- */
 class Particle {
   constructor(){
     this.x = Math.random()*canvas.width;
     this.y = Math.random()*canvas.height;
-    this.vx = (Math.random()-0.5)*0.35;
-    this.vy = (Math.random()-0.5)*0.35;
-    this.baseSize = 0.6 + Math.random()*0.9;   // small speckles
+    this.vx = (Math.random()-0.5)*0.25;
+    this.vy = (Math.random()-0.5)*0.25;
+    this.baseSize = 0.6 + Math.random()*0.9; // tiny
     this.size = this.baseSize;
     this.hue = Math.random()*360;
     this.color = `hsl(${this.hue},100%,70%)`;
   }
   update(bassN, midN, trebN, centroidN, beatBoost){
-    // drift + wrap
+    // --- Base drift & wrap
     this.x += this.vx; this.y += this.vy;
     if(this.x<0) this.x = canvas.width; if(this.x>canvas.width) this.x = 0;
     if(this.y<0) this.y = canvas.height; if(this.y>canvas.height) this.y = 0;
 
-    // attraction (mouse/touch) with linger
+    // --- Pointer attraction
     const dx = pointer.x - this.x, dy = pointer.y - this.y;
     const dist = Math.hypot(dx,dy) || 1;
-    const range = isTouch ? 280 : 200;
+    const range = isTouch ? 300 : 220;
     if (dist < range) {
-      const f = (1 - dist/range) * 0.11 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
+      const f = (1 - dist/range) * 0.14 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
       this.vx += (dx/dist)*f; this.vy += (dy/dist)*f;
     }
-    // damping
-    this.vx *= 0.995; this.vy *= 0.995;
 
-    // audio: size from bass + beat, hue from spectral centroid (feels more “timbral”)
-    const targetSize = this.baseSize + bassN*1.0 + beatBoost*0.8;
-    this.size = lerp(this.size, targetSize, 0.15);
+    // --- Music forces (strong visualizer style)
+    // Bass: radial push/contract (from screen center)
+    const cx = canvas.width/2, cy = canvas.height/2;
+    const rx = this.x - cx, ry = this.y - cy;
+    const rdist = Math.hypot(rx, ry) || 1;
+    const bassPush = (bassN - 0.35) * 0.9; // negative pulls in, positive pushes out
+    this.vx += (rx/rdist) * bassPush * 0.8;
+    this.vy += (ry/rdist) * bassPush * 0.8;
 
-    const targetHue = (centroidN * 300 + bassN * 30) % 360;
-    this.hue  = lerp(this.hue, targetHue, 0.10);
-    this.color = `hsl(${this.hue},100%,${60 + trebN*25}%)`;
+    // Mid: tangential swirl
+    const tangentX = -ry/rdist, tangentY = rx/rdist;
+    this.vx += tangentX * midN * 0.9;
+    this.vy += tangentY * midN * 0.9;
+
+    // Treble: high-frequency jitter
+    this.vx += (Math.random()-0.5) * trebN * 0.8;
+    this.vy += (Math.random)-0.5 * trebN * 0.8;
+
+    // Beat pop: brief extra outward kick
+    if (beatBoost > 0.02) {
+      this.vx += (rx/rdist) * beatBoost * 1.2;
+      this.vy += (ry/rdist) * beatBoost * 1.2;
+    }
+
+    // Damping to keep simulation stable
+    this.vx *= 0.985; this.vy *= 0.985;
+
+    // Size & color
+    const targetSize = this.baseSize + bassN*1.2 + beatBoost*1.2 + trebN*0.3;
+    this.size = lerp(this.size, targetSize, 0.18);
+    const targetHue = (centroidN*320 + bassN*40) % 360;
+    this.hue  = lerp(this.hue, targetHue, 0.15);
+    this.color = `hsl(${this.hue},100%,${60 + trebN*28}%)`;
   }
   draw(){
     ctx.shadowBlur = 8; ctx.shadowColor = this.color;
@@ -168,16 +203,54 @@ class Particle {
     ctx.shadowBlur = 0;
   }
 }
-const particles = Array.from({length: 720}, () => new Particle());
+
+/* ----- Flare bursts on beats ----- */
+class Flare {
+  constructor(){
+    this.alive = false;
+    this.x = 0; this.y = 0;
+    this.r = 0; this.maxR = 0;
+    this.alpha = 0;
+    this.hue = 0;
+  }
+  spawn(cx, cy, hue, power){
+    this.alive = true;
+    this.x = cx; this.y = cy;
+    this.r = 10;
+    this.maxR = 120 + power*300; // bigger on stronger beat
+    this.alpha = 0.35 + power*0.4;
+    this.hue = hue;
+  }
+  update(){
+    if (!this.alive) return;
+    this.r += 6;
+    this.alpha *= 0.93;
+    if (this.r > this.maxR || this.alpha < 0.01) this.alive = false;
+  }
+  draw(){
+    if (!this.alive) return;
+    const grad = ctx.createRadialGradient(this.x, this.y, this.r*0.2, this.x, this.y, this.r);
+    grad.addColorStop(0, `hsla(${this.hue},100%,70%,${this.alpha})`);
+    grad.addColorStop(1, `hsla(${this.hue},100%,50%,0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+/* Create pools */
+const particles = Array.from({length: BASE_PARTICLE_COUNT}, () => new Particle());
+const flares = Array.from({length: FLARE_POOL_SIZE}, () => new Flare());
 
 /* ====== Web Audio (dynamic, self-calibrating) ====== */
 let audioCtx, analyser, dataArray, source, isPlaying=false;
 let bassN=0, midN=0, trebN=0, centroidN=0;
 
-// Rolling stats for auto-gain & beat detection
-let rollPeak = 0.3, rollFloor = 0.05;     // start with sane values (0..1)
-let energyLT = 0.10, energyST = 0.10;     // long-term / short-term energy
-const PEAK_DECAY = 0.995, FLOOR_RISE = 0.999; // slow dynamics
+// Rolling stats for auto-gain & beat
+let rollPeak = 0.3, rollFloor = 0.05;
+let energyLT = 0.10, energyST = 0.10;
+const PEAK_DECAY = 0.995, FLOOR_RISE = 0.999;
 
 const btn = document.getElementById("toggleAudio");
 btn.addEventListener("click", () => {
@@ -185,8 +258,8 @@ btn.addEventListener("click", () => {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 1024;                   // finer bands
-      analyser.smoothingTimeConstant = 0.6;      // a bit snappier for rhythm
+      analyser.fftSize = 1024;                   // more bins
+      analyser.smoothingTimeConstant = 0.6;      // snappier for rhythm
       analyser.minDecibels = -95;
       analyser.maxDecibels = -5;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -215,7 +288,7 @@ btn.addEventListener("click", () => {
   }
 });
 
-// Helpers: bin index for a given Hz
+// Helpers
 function hzToIndex(hz){
   const nyquist = (audioCtx ? audioCtx.sampleRate : 48000) / 2;
   return Math.round(hz / nyquist * (dataArray.length-1));
@@ -227,7 +300,6 @@ function bandAvgHz(minHz, maxHz){
   return n? s/n : 0;
 }
 function spectralCentroid(){
-  // weighted mean frequency
   let num=0, den=0;
   const nyquist = (audioCtx ? audioCtx.sampleRate : 48000)/2;
   for(let i=0;i<dataArray.length;i++){
@@ -259,58 +331,84 @@ addEventListener("touchmove", e => {
 },{passive:false});
 addEventListener("touchend",  () => { dragging=false; pointer.active=false; });
 
-/* ====== Main loop ====== */
+/* ====== Main loop (high-reactivity visualizer) ====== */
+let camShakeX = 0, camShakeY = 0, camZoom = 0; // camera pulse
+
 function animate(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  if (!pointer.active && pointer.linger > 0) pointer.linger = Math.max(0, pointer.linger - 0.012);
-
-  // Audio → bands with auto gain + beat
+  // Analyze audio
   let beatBoost = 0;
   if(isPlaying && analyser){
     analyser.getByteFrequencyData(dataArray);
 
-    // Raw band means (0..255)
-    const bRaw = bandAvgHz(20, 180);
-    const mRaw = bandAvgHz(180, 2000);
-    const tRaw = bandAvgHz(2000, 8000);
+    // Bands by Hz (adjust as you like)
+    const bRaw = bandAvgHz(25, 160);
+    const mRaw = bandAvgHz(160, 2200);
+    const tRaw = bandAvgHz(2200, 9000);
 
-    // Convert to 0..1 roughly
     const b01 = bRaw/255, m01 = mRaw/255, t01 = tRaw/255;
 
-    // Rolling floor/peak (auto gain)
+    // Rolling floor/peak for auto-gain
     rollPeak = Math.max(rollPeak*PEAK_DECAY, b01, m01, t01);
-    rollFloor = Math.min(rollFloor/FLOOR_RISE, b01, m01, t01); // rises slowly toward signal
+    rollFloor = Math.min(rollFloor/FLOOR_RISE, b01, m01, t01);
+    const span = Math.max(0.06, rollPeak - rollFloor);
 
-    const span = Math.max(0.08, rollPeak - rollFloor); // avoid div-by-zero + keep sensitivity
+    // Normalize
     bassN = clamp((b01 - rollFloor)/span, 0, 1);
     midN  = clamp((m01 - rollFloor)/span, 0, 1);
     trebN = clamp((t01 - rollFloor)/span, 0, 1);
 
-    // Spectral centroid normalized 0..1 (0 = bass-heavy)
-    const sc = spectralCentroid(); // Hz
+    // Spectral centroid 0..1
+    const scHz = spectralCentroid();
     const nyquist = audioCtx.sampleRate/2;
-    centroidN = clamp(sc / nyquist, 0, 1);
+    centroidN = clamp(scHz / nyquist, 0, 1);
 
-    // Energy-based beat: short vs long-term
-    const instantEnergy = (b01*1.8 + m01*1.2 + t01*0.6) / 3.6; // weighted
+    // Beat via short vs long energy
+    const instantEnergy = (b01*2.0 + m01*1.2 + t01*0.6) / 3.8;
     energyST = lerp(energyST, instantEnergy, 0.35);
     energyLT = lerp(energyLT, instantEnergy, 0.02);
     const diff = energyST - energyLT;
-    beatBoost = diff > 0 ? diff*1.8 : 0; // positive when hitting
+    beatBoost = diff > 0 ? diff*2.2 : 0;
+
+    // Camera pulse
+    camShakeX = lerp(camShakeX, (Math.random()-0.5) * beatBoost * 28, 0.4);
+    camShakeY = lerp(camShakeY, (Math.random()-0.5) * beatBoost * 28, 0.4);
+    camZoom   = lerp(camZoom, beatBoost * 0.05, 0.4);
+
+    // Spawn a flare on strong beats
+    if (beatBoost > 0.06) {
+      const hue = (centroidN*320 + bassN*40) % 360;
+      const f = flares.find(fl => !fl.alive);
+      if (f) f.spawn(innerWidth/2, innerHeight/2, hue, beatBoost);
+    }
+  } else {
+    // decay camera pulse when paused
+    camShakeX *= 0.92; camShakeY *= 0.92; camZoom *= 0.92;
   }
 
-  // Rotation (ease back to reversed default)
+  // Draw with camera pulse
+  ctx.setTransform(1,0,0,1,0,0); // reset
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const zoom = 1 + camZoom;
+  ctx.translate(camShakeX + canvas.width/2, camShakeY + canvas.height/2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-canvas.width/2, -canvas.height/2);
+
+  // Update/draw particles
+  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost); p.draw(); }
+
+  // Update/draw flares after particles (additive glow look)
+  ctx.globalCompositeOperation = 'lighter';
+  for(const fl of flares){ fl.update(); fl.draw(); }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Carousel rotation (ease back to reversed default)
   rotationY += rotationSpeed;
   if(!dragging){ rotationSpeed = lerp(rotationSpeed, -0.25, 0.06); }
   applyRotation();
 
-  // Particles
-  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost); p.draw(); }
-
-  // Active panel glow: hue from centroid, size from treble
-  const hue = (centroidN*300 + bassN*30) % 360;
-  const glowSize = Math.max(10, trebN*35 + beatBoost*40);
+  // Active panel glow: hue from centroid, size from treble + beat
+  const hue = (centroidN*320 + bassN*40) % 360;
+  const glowSize = Math.max(12, trebN*38 + beatBoost*50);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
   panels.forEach(el => el.style.textShadow = "");
   let idx = Math.round(rotationY / (360 / panelCount)) % panelCount; if (idx < 0) idx += panelCount;
@@ -318,6 +416,7 @@ function animate(){
 
   // Ring shimmer with treble/centroid
   ring.style.opacity = String(0.25 + trebN * 0.30);
+
   requestAnimationFrame(animate);
 }
 animate();
