@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI + Humanity</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI + Humanity Carousel</title>
 <style>
 html, body {
   margin: 0;
@@ -18,7 +18,6 @@ canvas {
   top: 0;
   left: 0;
   z-index: 0;
-  pointer-events: none;
 }
 .carousel-container {
   position: absolute;
@@ -87,74 +86,70 @@ const quotes = [
 ];
 
 // Build carousel
-const carousel = document.getElementById('carousel');
+const carousel = document.getElementById("carousel");
 const panelCount = quotes.length;
 const panelWidth = 0.8 * window.innerWidth;
 const radius = Math.round((panelWidth / 2) / Math.tan(Math.PI / panelCount));
 
 quotes.forEach((quote, i) => {
-  const panel = document.createElement('div');
-  panel.className = 'carousel-panel';
+  const panel = document.createElement("div");
+  panel.className = "carousel-panel";
   panel.textContent = quote;
   const angle = (360 / panelCount) * i;
   panel.style.transform = `rotateY(${angle}deg) translateZ(${radius}px)`;
   carousel.appendChild(panel);
 });
-
-const panels = document.querySelectorAll('.carousel-panel');
+const panels = document.querySelectorAll(".carousel-panel");
 
 // Particle setup
-const canvas = document.getElementById('bg');
-const ctx = canvas.getContext('2d', { alpha: true });
+const canvas = document.getElementById("bg");
+const ctx = canvas.getContext("2d");
 let particles = [];
-let centerX = window.innerWidth / 2;
-let centerY = window.innerHeight / 2;
+let pointerX = window.innerWidth / 2;
+let pointerY = window.innerHeight / 2;
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  centerX = canvas.width / 2;
-  centerY = canvas.height / 2;
 }
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
 class Particle {
   constructor() { this.reset(); }
   reset() {
-    const angle = Math.random() * Math.PI * 2;
-    const screenRadius = Math.min(centerX, centerY) * 0.85;
-    const dist = screenRadius * (0.5 + Math.random() * 0.5);
-    this.x = centerX + Math.cos(angle) * dist;
-    this.y = centerY + Math.sin(angle) * dist;
-    this.vx = 0;
-    this.vy = 0;
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = (Math.random() - 0.5) * 0.4;
     this.size = 1 + Math.random() * 2;
-    this.color = 'rgba(255,255,255,0.9)';
+    this.color = "rgba(255,255,255,0.8)";
   }
   update(bass, mid, treble) {
-    const dx = this.x - centerX;
-    const dy = this.y - centerY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx) + 0.002 * (1 + mid / 200);
-    const targetX = centerX + Math.cos(angle) * dist;
-    const targetY = centerY + Math.sin(angle) * dist;
-
-    this.vx += (targetX - this.x) * 0.02;
-    this.vy += (targetY - this.y) * 0.02;
-
-    const radialPush = (bass - 100) * 0.02;
-    this.vx += (dx / dist) * radialPush * 0.001;
-    this.vy += (dy / dist) * radialPush * 0.001;
-
+    // Gentle drift
     this.x += this.vx;
     this.y += this.vy;
 
-    this.vx *= 0.92;
-    this.vy *= 0.92;
+    // Wrap around edges
+    if (this.x < 0) this.x = canvas.width;
+    if (this.x > canvas.width) this.x = 0;
+    if (this.y < 0) this.y = canvas.height;
+    if (this.y > canvas.height) this.y = 0;
 
+    // Pointer attraction
+    let dx = pointerX - this.x;
+    let dy = pointerY - this.y;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 150) { // pull range
+      let force = (150 - dist) / 150;
+      this.vx += (dx / dist) * force * 0.05;
+      this.vy += (dy / dist) * force * 0.05;
+    }
+
+    // Music reactivity
     const hue = (treble * 3 + bass) % 360;
     this.color = `hsl(${hue}, 100%, ${60 + bass / 4}%)`;
+    this.size = 1 + bass / 80;
   }
   draw() {
     ctx.beginPath();
@@ -164,14 +159,14 @@ class Particle {
   }
 }
 
-for (let i = 0; i < 250; i++) particles.push(new Particle());
+for (let i = 0; i < 300; i++) particles.push(new Particle());
 
 // Audio setup
 let audioCtx, analyser, dataArray, source;
 let isPlaying = false;
-const audioBtn = document.getElementById('toggleAudio');
+const audioBtn = document.getElementById("toggleAudio");
 
-audioBtn.addEventListener('click', () => {
+audioBtn.addEventListener("click", () => {
   if (!isPlaying) {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -179,7 +174,7 @@ audioBtn.addEventListener('click', () => {
       analyser.fftSize = 256;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-      fetch('goldberg_variations.mp3')
+      fetch("goldberg_variations.mp3")
         .then(res => res.arrayBuffer())
         .then(buf => audioCtx.decodeAudioData(buf))
         .then(decoded => {
@@ -189,17 +184,17 @@ audioBtn.addEventListener('click', () => {
           analyser.connect(audioCtx.destination);
           source.start(0);
           isPlaying = true;
-          audioBtn.textContent = 'Pause';
+          audioBtn.textContent = "Pause";
         });
     } else {
       audioCtx.resume();
       isPlaying = true;
-      audioBtn.textContent = 'Pause';
+      audioBtn.textContent = "Pause";
     }
   } else {
     audioCtx.suspend();
     isPlaying = false;
-    audioBtn.textContent = 'Play';
+    audioBtn.textContent = "Play";
   }
 });
 
@@ -209,16 +204,15 @@ function avg(arr) {
   return sum / arr.length;
 }
 
-// Carousel rotation interaction
+// Carousel interaction
 let rotationY = 0;
-let rotationSpeed = 0.2; // default clockwise speed
+let rotationSpeed = 0.2;
 let isDragging = false;
 let lastX = 0;
 
 function applyCarouselRotation() {
   carousel.style.transform = `rotateY(${rotationY}deg)`;
 }
-
 function startDrag(x) {
   isDragging = true;
   lastX = x;
@@ -233,16 +227,27 @@ function endDrag() {
   isDragging = false;
 }
 
-window.addEventListener('mousedown', e => startDrag(e.clientX));
-window.addEventListener('mousemove', e => dragMove(e.clientX));
-window.addEventListener('mouseup', endDrag);
+window.addEventListener("mousedown", e => startDrag(e.clientX));
+window.addEventListener("mousemove", e => dragMove(e.clientX));
+window.addEventListener("mouseup", endDrag);
 
-window.addEventListener('touchstart', e => startDrag(e.touches[0].clientX));
-window.addEventListener('touchmove', e => {
+window.addEventListener("touchstart", e => {
+  pointerX = e.touches[0].clientX;
+  pointerY = e.touches[0].clientY;
+  startDrag(pointerX);
+});
+window.addEventListener("touchmove", e => {
   e.preventDefault();
-  dragMove(e.touches[0].clientX);
+  pointerX = e.touches[0].clientX;
+  pointerY = e.touches[0].clientY;
+  dragMove(pointerX);
 }, { passive: false });
-window.addEventListener('touchend', endDrag);
+window.addEventListener("touchend", endDrag);
+
+window.addEventListener("mousemove", e => {
+  pointerX = e.clientX;
+  pointerY = e.clientY;
+});
 
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -257,26 +262,23 @@ function animate() {
     treble = avg(dataArray.slice(midEnd));
   }
 
-  // Rotation control
+  // Carousel rotation
   rotationY += rotationSpeed;
   if (!isDragging) {
     if (Math.abs(rotationSpeed) < 0.2) {
-      rotationSpeed += (0.2 - rotationSpeed) * 0.05; // ease back to default clockwise speed
+      rotationSpeed += (0.2 - rotationSpeed) * 0.05;
     }
   }
   applyCarouselRotation();
 
-  // Particles
-  particles.forEach(p => {
-    p.update(bass, mid, treble);
-    p.draw();
-  });
+  // Particles update/draw
+  particles.forEach(p => { p.update(bass, mid, treble); p.draw(); });
 
-  // Dynamic glow
+  // Glow
   const hue = (treble * 3 + bass) % 360;
   const glowSize = Math.max(10, treble / 1.5);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
-  panels.forEach(panel => panel.style.textShadow = '');
+  panels.forEach(panel => panel.style.textShadow = "");
   let index = Math.round(rotationY / (360 / panelCount)) % panelCount;
   if (index < 0) index += panelCount;
   panels[index].style.textShadow = glow;
