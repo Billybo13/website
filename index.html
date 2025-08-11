@@ -201,7 +201,7 @@ class Particle {
     const rdist = Math.hypot(rx, ry) || 1;
 
     // core repulsion ONLY when bass/beat present (no push when paused)
-    const corePower = (bassN*0.9 + beatBoost*0.4);
+    const corePower = (bassN*0.6 + beatBoost*0.25);
     if (corePower > 0 && rdist < CORE_RADIUS) {
       const repel = (1 - rdist/CORE_RADIUS) * 0.8 * corePower;
       this.vx += (rx/rdist) * repel;
