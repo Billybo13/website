@@ -6,8 +6,6 @@
 <title>AI + Humanity Carousel</title>
 <style>
 html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
-
-/* Background stars */
 canvas { position:fixed; inset:0; z-index:0; }
 
 /* Cylinder + quotes */
@@ -15,8 +13,6 @@ canvas { position:fixed; inset:0; z-index:0; }
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
   perspective:2000px; width:80vw; height:30vh; z-index:1;
 }
-
-/* Cylindrical backdrop ring */
 .cylinder-wrap { position:absolute; inset:0; transform-style:preserve-3d; pointer-events:none; z-index:0; }
 .ring-panel {
   position:absolute; left:50%; top:50%; transform-origin:center center;
@@ -34,26 +30,17 @@ canvas { position:fixed; inset:0; z-index:0; }
   opacity: 0.35;
   backdrop-filter: blur(2px) saturate(115%);
   -webkit-backdrop-filter: blur(2px) saturate(115%);
-  box-shadow:
-    inset 0 0 12px rgba(255,255,255,0.06),
-    0 0 24px rgba(0,0,0,0.28);
+  box-shadow: inset 0 0 12px rgba(255,255,255,0.06), 0 0 24px rgba(0,0,0,0.28);
 }
-
-/* Quote faces — airy glass */
 .carousel { position:absolute; inset:0; transform-style:preserve-3d; z-index:1; }
 .carousel-panel{
   position:absolute; width:80vw; height:30vh; display:flex; justify-content:center; align-items:center;
   font-size:clamp(1rem,2.2vw,2.5rem); font-weight:700; text-align:center; padding:2vw; box-sizing:border-box;
-
-  /* light, bright “frosted” pane */
   background: rgba(255,255,255,0.05);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid rgba(255,255,255,0.12);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.18),
-    0 10px 30px rgba(0,0,0,0.25);
-
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 30px rgba(0,0,0,0.25);
   border-radius:1vw;
   transition:text-shadow .2s ease;
 }
@@ -76,7 +63,10 @@ button{
 <button id="toggleAudio">Play</button>
 
 <script>
-/* ---------- Quotes / Cylinder build ---------- */
+/* ====== Config ====== */
+const AUDIO_FILE = "Dubdeath .wav"; // keep the space exactly if your file has it
+
+/* ====== Quotes / Cylinder build ====== */
 const quotes = [
   "AI will enhance human creativity, not replace it.",
   "Technology can amplify empathy and understanding.",
@@ -115,13 +105,14 @@ for (let i = 0; i < segmentCount; i++) {
   ring.appendChild(seg);
 }
 
-/* ---------- Canvas / Particles (soft glows) ---------- */
+/* ====== Canvas / Particles (soft glows) ====== */
 const canvas = document.getElementById("bg");
 const ctx = canvas.getContext("2d", { alpha:true });
 function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
 addEventListener("resize", resize); resize();
 
 function lerp(a,b,t){ return a + (b-a)*t; }
+function clamp(x,a,b){ return Math.min(b, Math.max(a, x)); }
 
 const pointer = { x: innerWidth/2, y: innerHeight/2, active:false, strength:1.0, linger:0.0 };
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
@@ -130,7 +121,6 @@ if (isTouch) pointer.strength = 2.2;
 addEventListener("mousemove", e => { pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
 addEventListener("mousedown", () => { pointer.active=true; pointer.linger=1.0; });
 addEventListener("mouseup",   () => { pointer.active=false; });
-
 addEventListener("touchstart", e => { const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
 addEventListener("touchmove",  e => { e.preventDefault(); const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
 addEventListener("touchend",   () => { pointer.active=false; });
@@ -141,16 +131,18 @@ class Particle {
     this.y = Math.random()*canvas.height;
     this.vx = (Math.random()-0.5)*0.35;
     this.vy = (Math.random()-0.5)*0.35;
-    this.baseSize = 0.6 + Math.random()*0.9;   // HALF size (0.6–1.5)
+    this.baseSize = 0.6 + Math.random()*0.9;   // small speckles
     this.size = this.baseSize;
     this.hue = Math.random()*360;
     this.color = `hsl(${this.hue},100%,70%)`;
   }
-  update(bassN, midN, trebN){
+  update(bassN, midN, trebN, centroidN, beatBoost){
+    // drift + wrap
     this.x += this.vx; this.y += this.vy;
     if(this.x<0) this.x = canvas.width; if(this.x>canvas.width) this.x = 0;
     if(this.y<0) this.y = canvas.height; if(this.y>canvas.height) this.y = 0;
 
+    // attraction (mouse/touch) with linger
     const dx = pointer.x - this.x, dy = pointer.y - this.y;
     const dist = Math.hypot(dx,dy) || 1;
     const range = isTouch ? 280 : 200;
@@ -158,13 +150,16 @@ class Particle {
       const f = (1 - dist/range) * 0.11 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
       this.vx += (dx/dist)*f; this.vy += (dy/dist)*f;
     }
+    // damping
     this.vx *= 0.995; this.vy *= 0.995;
 
-    const targetSize = this.baseSize + Math.max(0, bassN*0.9 + trebN*0.5);
-    this.size = lerp(this.size, targetSize, 0.08);
-    const targetHue = (trebN*240 + bassN*80) % 360;
-    this.hue  = lerp(this.hue, targetHue, 0.08);
-    this.color = `hsl(${this.hue},100%,${65 + bassN*20}%)`;
+    // audio: size from bass + beat, hue from spectral centroid (feels more “timbral”)
+    const targetSize = this.baseSize + bassN*1.0 + beatBoost*0.8;
+    this.size = lerp(this.size, targetSize, 0.15);
+
+    const targetHue = (centroidN * 300 + bassN * 30) % 360;
+    this.hue  = lerp(this.hue, targetHue, 0.10);
+    this.color = `hsl(${this.hue},100%,${60 + trebN*25}%)`;
   }
   draw(){
     ctx.shadowBlur = 8; ctx.shadowColor = this.color;
@@ -173,12 +168,16 @@ class Particle {
     ctx.shadowBlur = 0;
   }
 }
-/* DOUBLE count: 720 particles */
 const particles = Array.from({length: 720}, () => new Particle());
 
-/* ---------- Web Audio (smoothed) ---------- */
+/* ====== Web Audio (dynamic, self-calibrating) ====== */
 let audioCtx, analyser, dataArray, source, isPlaying=false;
-let bassN=0, midN=0, trebN=0;
+let bassN=0, midN=0, trebN=0, centroidN=0;
+
+// Rolling stats for auto-gain & beat detection
+let rollPeak = 0.3, rollFloor = 0.05;     // start with sane values (0..1)
+let energyLT = 0.10, energyST = 0.10;     // long-term / short-term energy
+const PEAK_DECAY = 0.995, FLOOR_RISE = 0.999; // slow dynamics
 
 const btn = document.getElementById("toggleAudio");
 btn.addEventListener("click", () => {
@@ -186,13 +185,13 @@ btn.addEventListener("click", () => {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.82;
-      analyser.minDecibels = -90;
-      analyser.maxDecibels = -10;
+      analyser.fftSize = 1024;                   // finer bands
+      analyser.smoothingTimeConstant = 0.6;      // a bit snappier for rhythm
+      analyser.minDecibels = -95;
+      analyser.maxDecibels = -5;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-      fetch("Dubdeath .wav") /* swap to your WAV later */
+      fetch(encodeURI(AUDIO_FILE))
         .then(r => r.arrayBuffer())
         .then(b => audioCtx.decodeAudioData(b))
         .then(decoded => {
@@ -216,13 +215,33 @@ btn.addEventListener("click", () => {
   }
 });
 
-function bandAvg(buf, a, b){ let s=0; for(let i=a;i<b;i++) s+=buf[i]; return s/Math.max(1,(b-a)); }
+// Helpers: bin index for a given Hz
+function hzToIndex(hz){
+  const nyquist = (audioCtx ? audioCtx.sampleRate : 48000) / 2;
+  return Math.round(hz / nyquist * (dataArray.length-1));
+}
+function bandAvgHz(minHz, maxHz){
+  const a = clamp(hzToIndex(minHz), 0, dataArray.length-1);
+  const b = clamp(hzToIndex(maxHz), 0, dataArray.length-1);
+  let s=0, n=0; for(let i=a;i<=b;i++){ s+=dataArray[i]; n++; }
+  return n? s/n : 0;
+}
+function spectralCentroid(){
+  // weighted mean frequency
+  let num=0, den=0;
+  const nyquist = (audioCtx ? audioCtx.sampleRate : 48000)/2;
+  for(let i=0;i<dataArray.length;i++){
+    const f = i/dataArray.length * nyquist;
+    const m = dataArray[i];
+    num += f*m; den += m;
+  }
+  return den ? num/den : 0;
+}
 
-/* ---------- Drag / touch spin (reversed default) ---------- */
+/* ====== Carousel interaction (reversed default) ====== */
 let rotationY = 0;
 let rotationSpeed = -0.25; // reversed default spin
 let dragging = false, lastX = 0;
-
 function applyRotation(){ carousel.style.transform = `rotateY(${rotationY}deg)`; }
 
 addEventListener("mousedown", e => { dragging=true; lastX=e.clientX; pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
@@ -240,39 +259,65 @@ addEventListener("touchmove", e => {
 },{passive:false});
 addEventListener("touchend",  () => { dragging=false; pointer.active=false; });
 
-/* ---------- Main loop (with ring shimmer + glow) ---------- */
+/* ====== Main loop ====== */
 function animate(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   if (!pointer.active && pointer.linger > 0) pointer.linger = Math.max(0, pointer.linger - 0.012);
 
+  // Audio → bands with auto gain + beat
+  let beatBoost = 0;
   if(isPlaying && analyser){
     analyser.getByteFrequencyData(dataArray);
-    const n = dataArray.length, bEnd=Math.floor(n*0.12), mEnd=Math.floor(n*0.45);
-    const b = bandAvg(dataArray, 0, bEnd);
-    const m = bandAvg(dataArray, bEnd, mEnd);
-    const t = bandAvg(dataArray, mEnd, n);
-    const nb = Math.min(1, b/140), nm=Math.min(1, m/140), nt=Math.min(1, t/140);
-    bassN = lerp(bassN, nb, 0.15);
-    midN  = lerp(midN,  nm, 0.15);
-    trebN = lerp(trebN, nt, 0.15);
+
+    // Raw band means (0..255)
+    const bRaw = bandAvgHz(20, 180);
+    const mRaw = bandAvgHz(180, 2000);
+    const tRaw = bandAvgHz(2000, 8000);
+
+    // Convert to 0..1 roughly
+    const b01 = bRaw/255, m01 = mRaw/255, t01 = tRaw/255;
+
+    // Rolling floor/peak (auto gain)
+    rollPeak = Math.max(rollPeak*PEAK_DECAY, b01, m01, t01);
+    rollFloor = Math.min(rollFloor/FLOOR_RISE, b01, m01, t01); // rises slowly toward signal
+
+    const span = Math.max(0.08, rollPeak - rollFloor); // avoid div-by-zero + keep sensitivity
+    bassN = clamp((b01 - rollFloor)/span, 0, 1);
+    midN  = clamp((m01 - rollFloor)/span, 0, 1);
+    trebN = clamp((t01 - rollFloor)/span, 0, 1);
+
+    // Spectral centroid normalized 0..1 (0 = bass-heavy)
+    const sc = spectralCentroid(); // Hz
+    const nyquist = audioCtx.sampleRate/2;
+    centroidN = clamp(sc / nyquist, 0, 1);
+
+    // Energy-based beat: short vs long-term
+    const instantEnergy = (b01*1.8 + m01*1.2 + t01*0.6) / 3.6; // weighted
+    energyST = lerp(energyST, instantEnergy, 0.35);
+    energyLT = lerp(energyLT, instantEnergy, 0.02);
+    const diff = energyST - energyLT;
+    beatBoost = diff > 0 ? diff*1.8 : 0; // positive when hitting
   }
 
+  // Rotation (ease back to reversed default)
   rotationY += rotationSpeed;
   if(!dragging){ rotationSpeed = lerp(rotationSpeed, -0.25, 0.06); }
   applyRotation();
 
-  for(const p of particles){ p.update(bassN, midN, trebN); p.draw(); }
+  // Particles
+  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost); p.draw(); }
 
-  const hue = (trebN*240 + bassN*80) % 360;
-  const glowSize = Math.max(10, trebN*30 + bassN*10);
+  // Active panel glow: hue from centroid, size from treble
+  const hue = (centroidN*300 + bassN*30) % 360;
+  const glowSize = Math.max(10, trebN*35 + beatBoost*40);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
   panels.forEach(el => el.style.textShadow = "");
   let idx = Math.round(rotationY / (360 / panelCount)) % panelCount; if (idx < 0) idx += panelCount;
   panels[idx].style.textShadow = glow;
 
-  ring.style.opacity = String(0.28 + trebN * 0.28);
-
+  // Ring shimmer with treble/centroid
+  ring.style.opacity = String(0.25 + trebN * 0.30);
   requestAnimationFrame(animate);
 }
 animate();
