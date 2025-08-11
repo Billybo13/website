@@ -6,28 +6,77 @@
 <title>AI + Humanity Carousel</title>
 <style>
 html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
+
+/* Background stars */
 canvas { position:fixed; inset:0; z-index:0; }
-.carousel-container { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); perspective:2000px; width:80vw; height:30vh; z-index:1; }
-.carousel { width:100%; height:100%; transform-style:preserve-3d; }
+
+/* Cylinder + quotes */
+.carousel-container {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  perspective:2000px; width:80vw; height:30vh; z-index:1;
+}
+
+/* Cylindrical backdrop ring */
+.cylinder-wrap { position:absolute; inset:0; transform-style:preserve-3d; pointer-events:none; z-index:0; }
+.ring-panel {
+  position:absolute; left:50%; top:50%; transform-origin:center center;
+  width: var(--stripW, 24px);
+  height: 30vh;
+  margin-left: calc(var(--stripW, 24px) / -2);
+  margin-top: calc(30vh / -2);
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg,
+      rgba(255,255,255,0.16) 0%,
+      rgba(255,255,255,0.08) 22%,
+      rgba(255,255,255,0.02) 52%,
+      rgba(0,0,0,0.28) 100%);
+  opacity: 0.35;
+  backdrop-filter: blur(2px) saturate(115%);
+  -webkit-backdrop-filter: blur(2px) saturate(115%);
+  box-shadow:
+    inset 0 0 12px rgba(255,255,255,0.06),
+    0 0 24px rgba(0,0,0,0.28);
+}
+
+/* Quote faces — airy glass */
+.carousel { position:absolute; inset:0; transform-style:preserve-3d; z-index:1; }
 .carousel-panel{
   position:absolute; width:80vw; height:30vh; display:flex; justify-content:center; align-items:center;
   font-size:clamp(1rem,2.2vw,2.5rem); font-weight:700; text-align:center; padding:2vw; box-sizing:border-box;
-  background:rgba(0,0,0,0.4); border-radius:1vw; backdrop-filter:blur(6px); transition:text-shadow .2s ease;
+
+  /* light, bright “frosted” pane */
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.18),
+    0 10px 30px rgba(0,0,0,0.25);
+
+  border-radius:1vw;
+  transition:text-shadow .2s ease;
 }
-button{ position:fixed; top:1rem; left:1rem; padding:.5rem 1rem; font-size:1rem; background:teal; border:0; border-radius:.5rem; color:#fff; cursor:pointer; z-index:2; }
+
+/* Play/Pause */
+button{
+  position:fixed; top:1rem; left:1rem; padding:.5rem 1rem; font-size:1rem;
+  background:teal; border:0; border-radius:.5rem; color:#fff; cursor:pointer; z-index:2;
+}
 </style>
 </head>
 <body>
 <canvas id="bg"></canvas>
 
 <div class="carousel-container">
+  <div class="cylinder-wrap" id="cylinderRing"></div>
   <div class="carousel" id="carousel"></div>
 </div>
 
 <button id="toggleAudio">Play</button>
 
 <script>
-/* ---------- Quotes / Carousel ---------- */
+/* ---------- Quotes / Cylinder build ---------- */
 const quotes = [
   "AI will enhance human creativity, not replace it.",
   "Technology can amplify empathy and understanding.",
@@ -38,8 +87,9 @@ const quotes = [
 ];
 
 const carousel = document.getElementById("carousel");
+const ring = document.getElementById("cylinderRing");
 const panelCount = quotes.length;
-const panelWidth = 0.8 * window.innerWidth;
+const panelWidth = 0.8 * innerWidth;
 const radius = Math.round((panelWidth / 2) / Math.tan(Math.PI / panelCount));
 
 quotes.forEach((q, i) => {
@@ -52,109 +102,83 @@ quotes.forEach((q, i) => {
 });
 const panels = document.querySelectorAll(".carousel-panel");
 
-/* ---------- Canvas / Particles ---------- */
+/* Cylindrical backdrop ring */
+const segmentCount = 60;
+const stripW = Math.max(8, Math.floor((2 * Math.PI * radius) / segmentCount));
+ring.style.setProperty('--stripW', stripW + 'px');
+for (let i = 0; i < segmentCount; i++) {
+  const seg = document.createElement('div');
+  seg.className = 'ring-panel';
+  const angle = i * (360 / segmentCount);
+  const tilt = Math.sin((i / segmentCount) * Math.PI * 2) * 0.6;
+  seg.style.transform = `rotateY(${angle}deg) rotateX(${tilt}deg) translateZ(${radius}px)`;
+  ring.appendChild(seg);
+}
+
+/* ---------- Canvas / Particles (soft glows) ---------- */
 const canvas = document.getElementById("bg");
-const ctx = canvas.getContext("2d", { alpha: true });
-function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+const ctx = canvas.getContext("2d", { alpha:true });
+function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
 addEventListener("resize", resize); resize();
 
 function lerp(a,b,t){ return a + (b-a)*t; }
 
-const pointer = {
-  x: innerWidth/2,
-  y: innerHeight/2,
-  active: false,
-  strength: 1,       // scaled up on mobile
-  linger: 0.0        // decays when not active
-};
-// detect touch-capable device (very simple heuristic)
+const pointer = { x: innerWidth/2, y: innerHeight/2, active:false, strength:1.0, linger:0.0 };
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-if (isTouch) { pointer.strength = 1.8; }
+if (isTouch) pointer.strength = 2.2;
 
-addEventListener("mousemove", e => {
-  pointer.x = e.clientX;
-  pointer.y = e.clientY;
-  pointer.active = true;
-  pointer.linger = 1.0;
-});
-addEventListener("mousedown", e => { pointer.active = true; pointer.linger = 1.0; });
-addEventListener("mouseup",   e => { pointer.active = false; });
+addEventListener("mousemove", e => { pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
+addEventListener("mousedown", () => { pointer.active=true; pointer.linger=1.0; });
+addEventListener("mouseup",   () => { pointer.active=false; });
 
-addEventListener("touchstart", e => {
-  pointer.x = e.touches[0].clientX;
-  pointer.y = e.touches[0].clientY;
-  pointer.active = true;
-  pointer.linger = 1.0;
-},{passive:false});
-addEventListener("touchmove", e => {
-  e.preventDefault();
-  pointer.x = e.touches[0].clientX;
-  pointer.y = e.touches[0].clientY;
-  pointer.active = true;
-  pointer.linger = 1.0;
-},{passive:false});
-addEventListener("touchend", e => {
-  pointer.active = false;
-  // linger decays in the loop
-});
+addEventListener("touchstart", e => { const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
+addEventListener("touchmove",  e => { e.preventDefault(); const t=e.touches[0]; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0; }, {passive:false});
+addEventListener("touchend",   () => { pointer.active=false; });
 
 class Particle {
   constructor(){
     this.x = Math.random()*canvas.width;
     this.y = Math.random()*canvas.height;
-    this.vx = (Math.random()-0.5)*0.3;
-    this.vy = (Math.random()-0.5)*0.3;
-    this.baseSize = 1 + Math.random()*2;
+    this.vx = (Math.random()-0.5)*0.35;
+    this.vy = (Math.random()-0.5)*0.35;
+    this.baseSize = 0.6 + Math.random()*0.9;   // HALF size (0.6–1.5)
     this.size = this.baseSize;
     this.hue = Math.random()*360;
     this.color = `hsl(${this.hue},100%,70%)`;
   }
-  update(bass, mid, treble){
-    // soft galaxy drift
-    this.x += this.vx;
-    this.y += this.vy;
+  update(bassN, midN, trebN){
+    this.x += this.vx; this.y += this.vy;
+    if(this.x<0) this.x = canvas.width; if(this.x>canvas.width) this.x = 0;
+    if(this.y<0) this.y = canvas.height; if(this.y>canvas.height) this.y = 0;
 
-    // wrap
-    if(this.x < 0) this.x = canvas.width;
-    if(this.x > canvas.width) this.x = 0;
-    if(this.y < 0) this.y = canvas.height;
-    if(this.y > canvas.height) this.y = 0;
-
-    // pointer attraction (works on desktop + touch; also lingers)
-    const pullX = pointer.x - this.x;
-    const pullY = pointer.y - this.y;
-    const dist = Math.hypot(pullX, pullY);
-    const radius = 220; // attraction radius
-    if (dist < radius) {
-      const f = (1 - dist/radius) * 0.08 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
-      this.vx += (pullX / (dist || 1)) * f;
-      this.vy += (pullY / (dist || 1)) * f;
+    const dx = pointer.x - this.x, dy = pointer.y - this.y;
+    const dist = Math.hypot(dx,dy) || 1;
+    const range = isTouch ? 280 : 200;
+    if (dist < range) {
+      const f = (1 - dist/range) * 0.11 * pointer.strength * (pointer.active ? 1.0 : 0.6*pointer.linger);
+      this.vx += (dx/dist)*f; this.vy += (dy/dist)*f;
     }
+    this.vx *= 0.995; this.vy *= 0.995;
 
-    // audio reactivity — smoothed size & hue
-    // (avoid big jump: lerp toward target size)
-    const targetSize = this.baseSize + Math.max(0, bassNorm*0.8 + trebleNorm*0.4);
+    const targetSize = this.baseSize + Math.max(0, bassN*0.9 + trebN*0.5);
     this.size = lerp(this.size, targetSize, 0.08);
-
-    const targetHue = (trebleNorm*240 + bassNorm*80) % 360;
-    this.hue = lerp(this.hue, targetHue, 0.08);
-    this.color = `hsl(${this.hue}, 100%, ${65 + bassNorm*20}%)`;
+    const targetHue = (trebN*240 + bassN*80) % 360;
+    this.hue  = lerp(this.hue, targetHue, 0.08);
+    this.color = `hsl(${this.hue},100%,${65 + bassN*20}%)`;
   }
   draw(){
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+    ctx.shadowBlur = 8; ctx.shadowColor = this.color;
     ctx.fillStyle = this.color;
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
   }
 }
-
-// create particles
-const particles = Array.from({length: 320}, () => new Particle());
+/* DOUBLE count: 720 particles */
+const particles = Array.from({length: 720}, () => new Particle());
 
 /* ---------- Web Audio (smoothed) ---------- */
 let audioCtx, analyser, dataArray, source, isPlaying=false;
-let bassAvg=0, midAvg=0, trebleAvg=0;     // raw averages
-let bassNorm=0, midNorm=0, trebleNorm=0;  // normalized 0..1 (smoothed)
+let bassN=0, midN=0, trebN=0;
 
 const btn = document.getElementById("toggleAudio");
 btn.addEventListener("click", () => {
@@ -163,12 +187,12 @@ btn.addEventListener("click", () => {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.smoothingTimeConstant = 0.82;
       analyser.minDecibels = -90;
       analyser.maxDecibels = -10;
       dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-      fetch("goldberg_variations.mp3")
+      fetch("goldberg_variations.mp3") /* swap to your WAV later */
         .then(r => r.arrayBuffer())
         .then(b => audioCtx.decodeAudioData(b))
         .then(decoded => {
@@ -192,70 +216,62 @@ btn.addEventListener("click", () => {
   }
 });
 
-function bandAvg(buf, start, end){
-  let s=0; for(let i=start;i<end;i++) s+=buf[i]; return s/Math.max(1,(end-start));
-}
+function bandAvg(buf, a, b){ let s=0; for(let i=a;i<b;i++) s+=buf[i]; return s/Math.max(1,(b-a)); }
 
-/* ---------- Carousel interaction ---------- */
+/* ---------- Drag / touch spin (reversed default) ---------- */
 let rotationY = 0;
-let rotationSpeed = 0.2; // default clockwise
+let rotationSpeed = -0.25; // reversed default spin
 let dragging = false, lastX = 0;
 
-function applyCarouselRotation(){ carousel.style.transform = `rotateY(${rotationY}deg)`; }
+function applyRotation(){ carousel.style.transform = `rotateY(${rotationY}deg)`; }
+
 addEventListener("mousedown", e => { dragging=true; lastX=e.clientX; pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
 addEventListener("mousemove", e => { if(dragging){ rotationSpeed = (e.clientX-lastX)*0.1; lastX=e.clientX; } pointer.x=e.clientX; pointer.y=e.clientY; pointer.active=true; pointer.linger=1.0; });
 addEventListener("mouseup",   () => { dragging=false; pointer.active=false; });
 
-addEventListener("touchstart", e => { const x=e.touches[0].clientX, y=e.touches[0].clientY; dragging=true; lastX=x; pointer.x=x; pointer.y=y; pointer.active=true; pointer.linger=1.0; }, {passive:false});
-addEventListener("touchmove",  e => { e.preventDefault(); const x=e.touches[0].clientX, y=e.touches[0].clientY; if(dragging){ rotationSpeed = (x-lastX)*0.1; lastX=x; } pointer.x=x; pointer.y=y; pointer.active=true; pointer.linger=1.0; }, {passive:false});
-addEventListener("touchend",   () => { dragging=false; pointer.active=false; });
+addEventListener("touchstart", e => {
+  const t=e.touches[0]; dragging=true; lastX=t.clientX; pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0;
+},{passive:false});
+addEventListener("touchmove", e => {
+  e.preventDefault();
+  const t=e.touches[0];
+  if(dragging){ rotationSpeed = (t.clientX-lastX)*0.1; lastX=t.clientX; }
+  pointer.x=t.clientX; pointer.y=t.clientY; pointer.active=true; pointer.linger=1.0;
+},{passive:false});
+addEventListener("touchend",  () => { dragging=false; pointer.active=false; });
 
-/* ---------- Main loop ---------- */
+/* ---------- Main loop (with ring shimmer + glow) ---------- */
 function animate(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // linger decay (so touch still influences briefly after lift)
-  if (!pointer.active && pointer.linger > 0) pointer.linger = Math.max(0, pointer.linger - 0.01);
+  if (!pointer.active && pointer.linger > 0) pointer.linger = Math.max(0, pointer.linger - 0.012);
 
-  // audio analysis
   if(isPlaying && analyser){
     analyser.getByteFrequencyData(dataArray);
-    const n = dataArray.length;
-    const bEnd = Math.floor(n*0.12);
-    const mEnd = Math.floor(n*0.45);
-
-    bassAvg   = bandAvg(dataArray, 0, bEnd);
-    midAvg    = bandAvg(dataArray, bEnd, mEnd);
-    trebleAvg = bandAvg(dataArray, mEnd, n);
-
-    // Normalize roughly 0..1 (tuned) & smooth
-    const nb = Math.min(1, bassAvg/140);
-    const nm = Math.min(1, midAvg/140);
-    const nt = Math.min(1, trebleAvg/140);
-    bassNorm   = lerp(bassNorm, nb, 0.15);
-    midNorm    = lerp(midNorm,  nm, 0.15);
-    trebleNorm = lerp(trebleNorm, nt, 0.15);
+    const n = dataArray.length, bEnd=Math.floor(n*0.12), mEnd=Math.floor(n*0.45);
+    const b = bandAvg(dataArray, 0, bEnd);
+    const m = bandAvg(dataArray, bEnd, mEnd);
+    const t = bandAvg(dataArray, mEnd, n);
+    const nb = Math.min(1, b/140), nm=Math.min(1, m/140), nt=Math.min(1, t/140);
+    bassN = lerp(bassN, nb, 0.15);
+    midN  = lerp(midN,  nm, 0.15);
+    trebN = lerp(trebN, nt, 0.15);
   }
 
-  // carousel rotation (eases back to default clockwise)
   rotationY += rotationSpeed;
-  if(!dragging){
-    const target = 0.2;
-    rotationSpeed = lerp(rotationSpeed, target, 0.05);
-  }
-  applyCarouselRotation();
+  if(!dragging){ rotationSpeed = lerp(rotationSpeed, -0.25, 0.06); }
+  applyRotation();
 
-  // particles
-  for(const p of particles){ p.update(bassNorm*200, midNorm*200, trebleNorm*200); p.draw(); }
+  for(const p of particles){ p.update(bassN, midN, trebN); p.draw(); }
 
-  // glow on front panel
-  const hue = (trebleNorm*240 + bassNorm*80) % 360;
-  const glowSize = Math.max(10, trebleNorm*30 + bassNorm*10);
+  const hue = (trebN*240 + bassN*80) % 360;
+  const glowSize = Math.max(10, trebN*30 + bassN*10);
   const glow = `0 0 ${glowSize}px hsl(${hue}, 100%, 60%)`;
   panels.forEach(el => el.style.textShadow = "");
-  let idx = Math.round(rotationY / (360 / panelCount)) % panelCount;
-  if (idx < 0) idx += panelCount;
+  let idx = Math.round(rotationY / (360 / panelCount)) % panelCount; if (idx < 0) idx += panelCount;
   panels[idx].style.textShadow = glow;
+
+  ring.style.opacity = String(0.28 + trebN * 0.28);
 
   requestAnimationFrame(animate);
 }
