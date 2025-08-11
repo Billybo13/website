@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI + Humanity — Music Visualizer (No-Stick Pointer)</title>
+<title>AI + Humanity — Music Visualizer (No Center Pull Idle)</title>
 <style>
 html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#fff; height:100%; }
 canvas { position:fixed; inset:0; z-index:0; }
@@ -68,7 +68,7 @@ const AUDIO_FILE = "Dubdeath .wav"; // exact filename (space included)
 const BASE_PARTICLE_COUNT = 720;
 const FLARE_POOL_SIZE = 36;         // subtle
 const CORE_RADIUS = 130;            // small core exclusion
-const CENTER_CONTAIN = 0.012;       // gentle center containment
+const CENTER_CONTAIN = 0.012;       // now auto-scales with audio energy
 
 /* ====== Quotes / Cylinder ====== */
 const quotes = [
@@ -143,6 +143,8 @@ addEventListener('touchmove', e => {
 addEventListener('touchend',  () => { pointer.active = false; });
 
 /* ----- Particles ----- */
+let audioEnergy = 0; // 0..1 overall energy (drives containment on/off)
+
 class Particle {
   constructor(){
     this.x = Math.random()*canvas.width;
@@ -154,17 +156,32 @@ class Particle {
     this.hue = Math.random()*360;
     this.color = `hsl(${this.hue},100%,70%)`;
   }
-  update(bassN, midN, trebN, centroidN, beatBoost, musicScale){
-    // base drift + wrap
+  update(bassN, midN, trebN, centroidN, beatBoost, musicScale, isAudioActive){
+    // base drift
     this.x += this.vx; this.y += this.vy;
+
+    // diffuse when paused (keeps them spread out)
+    if (!isAudioActive) {
+      this.vx += (Math.random()-0.5)*0.02;
+      this.vy += (Math.random()-0.5)*0.02;
+    } else {
+      // tiny background noise so it never “freezes”
+      this.vx += (Math.random()-0.5)*0.006;
+      this.vy += (Math.random()-0.5)*0.006;
+    }
+
+    // wrap
     if(this.x<0) this.x = canvas.width; if(this.x>canvas.width) this.x = 0;
     if(this.y<0) this.y = canvas.height; if(this.y>canvas.height) this.y = 0;
 
-    // soft containment toward center
+    // soft containment toward center — ONLY when there is some music energy
     const cx = canvas.width/2, cy = canvas.height/2;
     const dxc = cx - this.x, dyc = cy - this.y;
-    this.vx += dxc * CENTER_CONTAIN * 0.0015;
-    this.vy += dyc * CENTER_CONTAIN * 0.0015;
+    const containStrength = CENTER_CONTAIN * audioEnergy; // 0 when idle
+    if (containStrength > 0.0001) {
+      this.vx += dxc * containStrength * 0.0015;
+      this.vy += dyc * containStrength * 0.0015;
+    }
 
     // pointer attraction (only with recent motion or active press)
     const dxp = pointer.x - this.x, dyp = pointer.y - this.y;
@@ -183,9 +200,10 @@ class Particle {
     const rx = this.x - cx, ry = this.y - cy;
     const rdist = Math.hypot(rx, ry) || 1;
 
-    // core repulsion near center based on bass (prevents center blob)
-    if (rdist < CORE_RADIUS) {
-      const repel = (1 - rdist/CORE_RADIUS) * 0.8 * (0.4 + bassN*0.6);
+    // core repulsion ONLY when bass/beat present (no push when paused)
+    const corePower = (bassN*0.9 + beatBoost*0.4);
+    if (corePower > 0 && rdist < CORE_RADIUS) {
+      const repel = (1 - rdist/CORE_RADIUS) * 0.8 * corePower;
       this.vx += (rx/rdist) * repel;
       this.vy += (ry/rdist) * repel;
     }
@@ -337,7 +355,7 @@ addEventListener("touchmove", e => {
 },{passive:false});
 addEventListener("touchend",  () => { dragging=false; pointer.active=false; });
 
-/* ====== Main loop (balanced, no sticky pointer) ====== */
+/* ====== Main loop (balanced, no idle center pull) ====== */
 let camShakeX = 0, camShakeY = 0, camZoom = 0;
 
 function animate(){
@@ -372,6 +390,9 @@ function animate(){
     const diff = energyST - energyLT;
     beatBoost = diff > 0 ? diff*1.4 : 0;
 
+    // compute overall energy (0..1) to drive containment
+    audioEnergy = clamp((bassN + midN + trebN) / 3, 0, 1);
+
     // subtle camera pulse
     camShakeX = lerp(camShakeX, (Math.random()-0.5) * beatBoost * 10, 0.4);
     camShakeY = lerp(camShakeY, (Math.random()-0.5) * beatBoost * 10, 0.4);
@@ -389,6 +410,7 @@ function animate(){
     midN  = lerp(midN,  0, 0.15);
     trebN = lerp(trebN, 0, 0.15);
     centroidN = lerp(centroidN, 0.3, 0.05);
+    audioEnergy = lerp(audioEnergy, 0, 0.2); // turn containment fully off
     camShakeX *= 0.9; camShakeY *= 0.9; camZoom *= 0.9;
   }
 
@@ -407,7 +429,8 @@ function animate(){
   ctx.translate(-canvas.width/2, -canvas.height/2);
 
   // particles
-  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost, musicScale); p.draw(); }
+  const isAudioActive = isPlaying && audioEnergy > 0.02;
+  for(const p of particles){ p.update(bassN, midN, trebN, centroidN, beatBoost, musicScale, isAudioActive); p.draw(); }
 
   // flares
   ctx.globalCompositeOperation = 'lighter';
