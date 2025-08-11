@@ -41,7 +41,7 @@ canvas {
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 2.2vw;
+  font-size: clamp(1rem, 2.2vw, 2.5rem);
   font-weight: bold;
   text-align: center;
   padding: 2vw;
@@ -49,6 +49,7 @@ canvas {
   background: rgba(0, 0, 0, 0.4);
   border-radius: 1vw;
   backdrop-filter: blur(4px);
+  transition: text-shadow 0.2s ease;
 }
 @keyframes rotate {
   from { transform: rotateY(0deg); }
@@ -103,6 +104,8 @@ quotes.forEach((quote, i) => {
   carousel.appendChild(panel);
 });
 
+const panels = document.querySelectorAll('.carousel-panel');
+
 // Particle setup
 const canvas = document.getElementById('bg');
 const ctx = canvas.getContext('2d');
@@ -115,18 +118,22 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 class Particle {
-  constructor(x, y, vx, vy, size, color) {
-    this.x = x; this.y = y;
-    this.vx = vx; this.vy = vy;
-    this.size = size;
-    this.color = color;
+  constructor() {
+    this.reset();
+  }
+  reset() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * canvas.height;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.size = Math.random() * 2;
+    this.color = 'rgba(255,255,255,0.8)';
   }
   update() {
     this.x += this.vx;
     this.y += this.vy;
     if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
-      this.x = Math.random() * canvas.width;
-      this.y = Math.random() * canvas.height;
+      this.reset();
     }
   }
   draw() {
@@ -137,24 +144,9 @@ class Particle {
   }
 }
 
-for (let i = 0; i < 200; i++) {
-  particles.push(new Particle(
-    Math.random() * canvas.width,
-    Math.random() * canvas.height,
-    (Math.random() - 0.5) * 0.3,
-    (Math.random() - 0.5) * 0.3,
-    Math.random() * 1.5,
-    'white'
-  ));
+for (let i = 0; i < 250; i++) {
+  particles.push(new Particle());
 }
-
-// Mouse tracking
-let mouseX = canvas.width / 2;
-let mouseY = canvas.height / 2;
-document.addEventListener('mousemove', e => {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-});
 
 // Audio setup
 let audioCtx, analyser, dataArray, source;
@@ -193,10 +185,16 @@ audioBtn.addEventListener('click', () => {
   }
 });
 
-function animate() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function avg(arr) {
+  let sum = 0;
+  for (let v of arr) sum += v;
+  return sum / arr.length;
+}
 
-  // Update particles
+function animate() {
+  ctx.fillStyle = 'rgba(0,0,0,0.2)'; // slight trail effect
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   let bass = 0, mid = 0, treble = 0;
   if (isPlaying && analyser) {
     analyser.getByteFrequencyData(dataArray);
@@ -208,25 +206,24 @@ function animate() {
   }
 
   particles.forEach(p => {
-    // Gentle pull toward mouse
-    p.vx += (mouseX - p.x) * 0.00001;
-    p.vy += (mouseY - p.y) * 0.00001;
-
-    // Music bursts
-    p.vx += (Math.random() - 0.5) * (bass / 5000);
-    p.vy += (Math.random() - 0.5) * (treble / 8000);
-
+    p.vx += (Math.random() - 0.5) * (bass / 20000);
+    p.vy += (Math.random() - 0.5) * (treble / 30000);
     p.update();
     p.draw();
   });
 
-  requestAnimationFrame(animate);
-}
+  // Dynamic glow on front-facing panel
+  const hue = (treble * 3) % 360;
+  const glow = `0 0 ${Math.max(5, treble / 2)}px hsl(${hue}, 100%, 60%)`;
+  panels.forEach(panel => panel.style.textShadow = '');
 
-function avg(arr) {
-  let sum = 0;
-  for (let v of arr) sum += v;
-  return sum / arr.length;
+  // Find closest-to-front panel
+  let rotationY = (performance.now() / 24000 * 360) % 360;
+  let index = Math.round(rotationY / (360 / panelCount)) % panelCount;
+  if (index < 0) index += panelCount;
+  panels[index].style.textShadow = glow;
+
+  requestAnimationFrame(animate);
 }
 
 animate();
